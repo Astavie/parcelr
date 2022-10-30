@@ -9,7 +9,7 @@ main :: proc() {
     return
   }
 
-  type : analyser
+  type : Analyser
   switch os.args[1] {
     case "LR0":
       type = .LR0
@@ -35,9 +35,8 @@ main :: proc() {
   print_grammar(g)
   fmt.println()
 
-  lexemes := calc_lexemes(g)
   empty := calc_empty_set(g)
-  first := calc_first_sets(g, lexemes, empty)
+  first := calc_first_sets(g, empty)
   follow := calc_follow_sets(g, first, empty)
 
   table := calc_table(g, type, first, follow)

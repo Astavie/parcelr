@@ -3,86 +3,80 @@ package main
 import "core:slice"
 import "core:fmt"
 
-ROOT :: symbol(0)
-NONE :: symbol(127)
-
-item :: struct {
-  rule      : int,
-  indx      : int,
-  lookahead : symbset,
+Item :: struct {
+  rule      : Rule,
+  index     : int,
+  lookahead : Lookahead,
 }
 
-start_rule :: -1
-start_item :: item { start_rule, 0, { NONE } }
+LEX_MIN :: Lexeme(0)
+LEX_MAX :: Lexeme(127)
+Lookahead :: bit_set[LEX_MIN..=LEX_MAX]
 
-void    :: struct{}
-itemset :: []item
-symbset :: bit_set[ROOT..=NONE]
+Decision :: union #no_nil { Reduce, Shift }
 
-reduce :: distinct int // number refers to rule
-shift  :: distinct int // number refers to state
+Table :: []map[Symbol]Decision
 
-decision :: union #no_nil { reduce, shift }
+Reduce :: distinct Rule // number refers to rule
+Shift  :: distinct int  // number refers to state
 
-table :: []map[symbol]decision
+Analyser :: enum { LR0, SLR1, CLR1, LALR1 }
 
-analyser :: enum { LR0, SLR1, CLR1, LALR1 }
-
-predict :: proc(g : grammar, type : analyser, set : itemset, first : []symbset, follow : []symbset) -> itemset {
+predict :: proc(g : Grammar, type : Analyser, set : []Item, first : []Lookahead, follow : []Lookahead) -> []Item {
   stack      := slice.clone_to_dynamic(set)
   prediction := slice.clone_to_dynamic(set)
 
-  all_symbols := transmute(symbset)(max(u128) >> u8(128 - len(g.names))) + { NONE }
+  all_symbols := transmute(Lookahead)(max(u128) >> u8(128 - len(g.lexemes)))
 
   for len(stack) > 0 {
-    itm := pop(&stack)
+    item := pop(&stack)
 
-    rhs : []symbol = { ROOT }
-    if itm.rule != start_rule do rhs = g.rules[itm.rule].rhs
-    if len(rhs) <= itm.indx   do continue
+    rhs := g.rules[item.rule].rhs
+    if len(rhs) <= item.index do continue
 
-    sym := rhs[itm.indx]
-    lah := itm.lookahead
-    if len(rhs) > itm.indx + 1 do lah = first[rhs[itm.indx + 1]]
+    sym := rhs[item.index]
+    lah := item.lookahead
+    if len(rhs) > item.index + 1 do lah = first[rhs[item.index + 1]]
 
-    a: for rule, idx in g.rules {
-      if sym != rule.lhs do continue
+    a: for def, idx in g.rules {
+      if sym != def.lhs do continue
+      rule := Rule(idx)
 
       switch type {
         case .LALR1:
-          itm := item { idx, 0, lah }
+          item := Item { rule, 0, lah }
 
           for prev, idx in prediction {
-            if prev.rule == itm.rule && prev.indx == itm.indx {
+            if prev.rule == item.rule && prev.index == item.index {
               prediction[idx].lookahead += lah
               continue a
             }
           }
 
-          append(&prediction, itm)
-          append(&stack, itm)
+          append(&prediction, item)
+          append(&stack, item)
         case .CLR1:
-          for next in ROOT..=NONE {
+          for next in LEX_MIN..=LEX_MAX {
             if !(next in lah) do continue
             
-            itm := item { idx, 0, { next } }
-            if slice.contains(prediction[:], itm) do continue
+            item := Item { rule, 0, { next } }
+            if slice.contains(prediction[:], item) do continue
 
-            append(&prediction, itm)
-            append(&stack, itm)
+            append(&prediction, item)
+            append(&stack, item)
           }
         case .SLR1:
-          itm := item { idx, 0, follow[g.rules[idx].lhs] }
-          if slice.contains(prediction[:], itm) do continue
+          item := Item { rule, 0, follow[g.rules[idx].lhs] }
+          if slice.contains(prediction[:], item) do continue
           
-          append(&prediction, itm)
-          append(&stack, itm)
+          append(&prediction, item)
+          append(&stack, item)
         case .LR0:
-          itm := item { idx, 0, all_symbols }
-          if slice.contains(prediction[:], itm) do continue
+          item := Item { rule, 0, all_symbols }
+          if slice.contains(prediction[:], item) do continue
           
-          append(&prediction, itm)
-          append(&stack, itm)
+          append(&prediction, item)
+          append(&stack, item)
       }
     }
   }
@@ -98,37 +92,36 @@ inject_sort :: proc(a : $T/^[dynamic]$E, b : E, less : proc(a, b : E) -> bool) {
   }
 }
 
-partition :: proc(g : grammar, set : itemset) -> map[symbol]itemset {
-  groups := make(map[symbol][dynamic]item)
+partition :: proc(g : Grammar, set : []Item) -> map[Symbol][]Item {
+  groups := make(map[Symbol][dynamic]Item)
 
-  for itm in set {
-    sym := NONE
-    put := itm
+  for item in set {
+    sym := ROOT
+    put := item
 
-    rhs : []symbol = { ROOT }
-    if itm.rule != start_rule do rhs = g.rules[itm.rule].rhs
-    if (len(rhs) > itm.indx) {
-      sym = rhs[itm.indx]
-      put = { itm.rule, itm.indx + 1, itm.lookahead }
+    rhs := g.rules[item.rule].rhs
+    if (len(rhs) > item.index) {
+      sym = rhs[item.index]
+      put = { item.rule, item.index + 1, item.lookahead }
     }
 
     if sym in groups {
-      inject_sort(&groups[sym], put, proc(a, b: item) -> bool {
+      inject_sort(&groups[sym], put, proc(a, b: Item) -> bool {
         if a.rule < b.rule do return true
         if a.rule > b.rule do return false
-        if a.indx < b.indx do return true
-        if a.indx > b.indx do return false
+        if a.index < b.index do return true
+        if a.index > b.index do return false
         if transmute(u128)a.lookahead < transmute(u128)b.lookahead do return true
         return false
       })
     } else {
-      is := make([dynamic]item)
+      is := make([dynamic]Item)
       append(&is, put)
       groups[sym] = is
     }
   }
 
-  final_groups := make(map[symbol]itemset, len(groups))
+  final_groups := make(map[Symbol][]Item, len(groups))
   for sym, group in groups {
     final_groups[sym] = group[:]
   }
@@ -144,33 +137,43 @@ indexof_slice :: proc(a : $T/[][]$E, b : []E) -> (int, bool) {
   return ---, false
 }
 
-calc_table :: proc(g : grammar, type : analyser, first : []symbset, follow : []symbset) -> table {
-  table    := make([dynamic]map[symbol]decision)
-  itemsets := make([dynamic]itemset)
-  start    := predict(g, type, { start_item }, first, follow)
-  append(&itemsets, start)
-  append(&table, make(map[symbol]decision))
+calc_table :: proc(g : Grammar, type : Analyser, first : []Lookahead, follow : []Lookahead) -> Table {
   
-  // the following are used for LALR(1) parsing
-  itemsets_nolook := make([dynamic]itemset)
-  unmerged := make([dynamic]int)
-  merges   := make([dynamic][2]int)
-  clone := slice.clone(start)
-  for itm in &clone do itm.lookahead = {}
-  append(&itemsets_nolook, clone)
-  append(&unmerged, 0)
-
-  defer {
-    for set in itemsets do delete(set)
-    for set in itemsets_nolook do delete(set)
-    delete(itemsets)
-    delete(unmerged)
-    delete(itemsets_nolook)
-    delete(merges)
+  StackEntry :: struct {
+    set   : []Item,
+    index : int,
   }
 
-  for i in 0..<len(itemsets) {
-    set := itemsets[i]
+  find_entry :: proc(stack : []StackEntry, elem : []Item) -> (int, bool) {
+    for entry in stack {
+      if slice.equal(entry.set, elem) do return entry.index, true
+    }
+    return ---, false
+  }
+
+  table    := make([dynamic]map[Symbol]Decision)
+  stack    := make([dynamic]StackEntry)
+  start    := predict(g, type, {{ Rule(0), 0, { EOF } }}, first, follow)
+  append(&stack, StackEntry { start, 0 })
+  append(&table, make(map[Symbol]Decision))
+  
+  // the following are used for LALR(1) parsing
+  final_sets := make([dynamic][]Item)
+  clone := slice.clone(start)
+  for item in &clone do item.lookahead = {}
+  append(&final_sets, clone)
+
+  defer {
+    for entry in stack do delete(entry.set)
+    for set in final_sets do delete(set)
+    delete(final_sets)
+    delete(stack)
+  }
+
+  for _i := 0; _i < len(stack); _i += 1 {
+    entry := stack[_i]
+    set   := entry.set
+    i     := entry.index
  
     pset := predict(g, type, set, first, follow)
     defer delete(pset)
@@ -179,18 +182,19 @@ calc_table :: proc(g : grammar, type : analyser, first : []symbset, follow : []s
     defer delete(part)
 
     for sym, items in part {
-      if sym == NONE {
+      if sym == ROOT {
         defer delete(items)
-        for itm in items {
-          e := reduce(itm.rule)
-          for next in ROOT..=NONE {
-            if !(next in itm.lookahead) do continue
+        for item in items {
+          e := Reduce(item.rule)
+          for lex in LEX_MIN..=LEX_MAX {
+            if !(lex in item.lookahead) do continue
+            next := g.lexemes[lex]
             if next in table[i] && table[i][next] != e {
               // TODO better errors
-              switch v in table[i][next] {
-                case shift:
+              switch in table[i][next] {
+                case Shift:
                   panic("SHIFT/REDUCE CONFLICT")
-                case reduce:
+                case Reduce:
                   panic("REDUCE/REDUCE CONFLICT")
               }
             }
@@ -200,116 +204,88 @@ calc_table :: proc(g : grammar, type : analyser, first : []symbset, follow : []s
       } else {
         if sym in table[i] {
           // TODO better errors
-          panic("SHIFT/REDUCE CONFLICT")
+          switch in table[i][sym] {
+            case Shift:
+              // we assume we are merging two identical shifts
+            case Reduce:
+              panic("SHIFT/REDUCE CONFLICT")
+          }
         }
 
-        if idx, ok := indexof_slice(itemsets[:], items); ok {
-          table[i][sym] = shift(unmerged[idx])
+        if idx, ok := find_entry(stack[:], items); ok {
+          // we found an identical state
+          table[i][sym] = Shift(idx)
           delete(items)
         } else {
           idx : int
           ok := false
           if type == .LALR1 {
+            // check if states can be merged
             clone := slice.clone(items)
-            for itm in &clone do itm.lookahead = {}
+            for item in &clone do item.lookahead = {}
           
-            idx, ok = indexof_slice(itemsets_nolook[:], clone)
+            idx, ok = indexof_slice(final_sets[:], clone)
             
-            append(&itemsets_nolook, clone)
+            if !ok do append(&final_sets, clone)
           }
           
           if ok {
-            table[i][sym] = shift(unmerged[idx])
-            append(&merges, [2]int{ len(itemsets), idx })
-            append(&unmerged, unmerged[idx])
+            // mark entry to be merged with a previous state
+            table[i][sym] = Shift(idx)
+            append(&stack, StackEntry { items, idx })
           } else {
-            table[i][sym] = shift(len(itemsets) - len(merges))
-            append(&unmerged, len(itemsets) - len(merges))
+            // create a new state
+            table[i][sym] = Shift(len(table))
+            append(&stack, StackEntry { items, len(table) })
+            append(&table, make(map[Symbol]Decision))
           }
-
-          append(&itemsets, items)
-          append(&table, make(map[symbol]decision))
         }
       }
     }
   }
 
-  for idx := len(merges) - 1; idx >= 0; idx -= 1 {
-    from := merges[idx][0]
-    into := merges[idx][1]
-    for sym, dec in table[from] {
-      if sym in table[into] && table[into][sym] != dec {
-        // TODO better errors
-        panic("REDUCE/REDUCE CONFLICT")
-      }
-      table[into][sym] = dec
-    }
-    delete(itemsets[from])
-    delete(table[from])
-    ordered_remove(&itemsets, from)
-    ordered_remove(&table,    from)
-  }
-
   return table[:]
 }
 
-calc_lexemes :: proc(g : grammar) -> symbset {
-  notlexemes := symbset{}
-  lexemes := symbset{}
-
-  for r in g.rules {
-    notlexemes += { r.lhs }
-  }
-
-  for _, idx in g.names {
-    sym := symbol(idx)
-    if !(sym in notlexemes) do lexemes += { sym }
-  }
-
-  return lexemes
-}
-
-contains_all :: proc(a : $T/bit_set[$E], b : []E) -> bool {
+contains_all :: proc(a : $T/map[$K]$V, b : []K) -> bool {
   for elem in b {
     if !(elem in a) do return false
   }
   return true
 }
 
-calc_empty_set :: proc(g : grammar) -> symbset {
-  symbols := symbset{}
-  for r in g.rules {
-    if len(r.rhs) == 0 do symbols += { r.lhs }
+calc_empty_set :: proc(g : Grammar) -> map[Symbol]void {
+  symbols := make(map[Symbol]void)
+  for rule in g.rules {
+    if len(rule.rhs) == 0 do symbols[rule.lhs] = {}
   }
 
   for {
-    n := card(symbols)
-    for r in g.rules {
-      if contains_all(symbols, r.rhs) do symbols += { r.lhs }
+    n := len(symbols)
+    for rule in g.rules {
+      if contains_all(symbols, rule.rhs) do symbols[rule.lhs] = {}
     }
-    if card(symbols) == n do break
+    if len(symbols) == n do break
   }
 
   return symbols
 }
 
-calc_first_sets :: proc(g : grammar, lexemes, empty : symbset) -> []symbset {
-  symbols := make([]symbset, len(g.names))
-  routes  := make(map[[2]symbol]void)
+calc_first_sets :: proc(g : Grammar, empty : map[Symbol]void) -> []Lookahead {
+  symbols := make([]Lookahead, len(g.symbols))
+  routes  := make(map[[2]Symbol]void)
 
   defer delete(routes)
 
-  for i in 0..<len(g.names) {
-    sym := symbol(i)
-    if sym in lexemes {
-      symbols[sym] += { sym }
-    }
+  for i in 0..<len(g.lexemes) {
+    symbol := g.lexemes[i]
+    symbols[symbol] += { Lexeme(i) }
   }
 
-  for r in g.rules {
-    for symb in r.rhs {
-      routes[{ r.lhs, symb }] = {}
-      if !(symb in empty) do break
+  for rule in g.rules {
+    for symbol in rule.rhs {
+      routes[{ rule.lhs, symbol }] = {}
+      if !(symbol in empty) do break
     }
   }
 
@@ -325,22 +301,22 @@ calc_first_sets :: proc(g : grammar, lexemes, empty : symbset) -> []symbset {
   return symbols
 }
 
-calc_follow_sets :: proc(g : grammar, first : []symbset, empty : symbset) -> []symbset {
-  symbols := make([]symbset, len(g.names))
-  routes := make(map[[2]symbol]void)
+calc_follow_sets :: proc(g : Grammar, first : []Lookahead, empty : map[Symbol]void) -> []Lookahead {
+  symbols := make([]Lookahead, len(g.symbols))
+  routes := make(map[[2]Symbol]void)
 
   defer delete(routes)
 
-  for r in g.rules {
-    for symb, idx in r.rhs {
+  for rule in g.rules {
+    for symbol, idx in rule.rhs {
       max := idx + 1
-      for symb2, idx2 in r.rhs[max:] {
-        symbols[symb] += first[symb2]
+      for symb2, idx2 in rule.rhs[max:] {
+        symbols[symbol] += first[symb2]
         if !(symb2 in empty) do break
         max = idx2 + 1
       }
-      if (max == len(r.rhs)) {
-        routes[{ symb, r.lhs }] = {}
+      if (max == len(rule.rhs)) {
+        routes[{ symbol, rule.lhs }] = {}
       }
     }
   }
