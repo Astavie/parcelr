@@ -4,12 +4,14 @@ import "core:slice"
 import "core:fmt"
 import "core:os"
 
-Token :: enum {
+Token :: enum { EOF } //d
+
+//w Token :: enum {
 //token
-  //w ${token},
+  //w  ${token}
+  //s ,
 //e
-  EOF, //d
-}
+//w  }
 
 PARCELR_DEBUG :: false
 
@@ -20,7 +22,7 @@ when PARCELR_DEBUG {
       for s in os.args[1:] {
         switch s {
         //lexeme
-          //w case "${lexeme}": append(&tokens, Token.${lexeme})
+          //l case "${lexeme}": append(&tokens, Token.${lexeme})
         //e
           case: panic(fmt.tprintf("Unknown token %v", s))
         }
@@ -71,31 +73,41 @@ parse :: proc(lexemes: []Token) -> Token {
     token := peek(stack[:])
     switch state {
     //state
-      //w case ${state.index}:
+      //l case ${state.index}:
       case 0: //d
-        #partial switch token {
+        switch token {
+          case .EOF: //d
         //state.lookahead lah
-          //w case Token.${lah.token}:
+          //w case 
+          //lah.token
+            //w  .${token}
+            //s ,
+          //e
+          //w :
           //lah.accept
-            //w return shifted[0].token
+            //l return shifted[0].token
           //e
           //lah.shift
-            //w shift(&stack, &shifted, &state, ${shift})
-            //w continue
+            //l shift(&stack, &shifted, &state, ${shift})
+            //l continue
           //e
           //lah.reduce
-            //w reduce(&stack, &shifted, &state,
-            //w   proc (tokens: [${reduce.rhs.length}]Token) -> Token { return Token.${reduce.lhs} })
-            //w continue
+            //l reduce(&stack, &shifted, &state,
+            //l   proc (tokens: [${reduce.rhs.length}]Token) -> Token { return Token.${reduce.lhs} })
+            //l continue
           //e
         //e
           case:
-            tokens :: [?]Token{Token.EOF} //d
+            tokens :: [?]Token{ .EOF } //d
             //w tokens :: [?]Token{
             //state.lookahead lah
-              //w Token.${lah.token},
+            //lah.token
+              //w  .${token}
+              //s ,
             //e
-            //w }
+              //s ,
+            //e
+            //w  }
             panic(fmt.tprintf("Unexpected %v, expected %v", token, tokens))
         }
     //e

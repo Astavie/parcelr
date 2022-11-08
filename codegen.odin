@@ -21,6 +21,8 @@ Write :: struct {
   before: string,
   after:  string,
   vars: []WriteEntry,
+  newline: bool,
+  separator: bool,
 }
 
 End :: distinct void
@@ -28,9 +30,9 @@ End :: distinct void
 Directive :: union #no_nil { Start, Write, End }
 
 LookaheadVal :: struct {
-  token: string,
+  token:  []string,
   accept: []void,
-  shift: []int,
+  shift:  []int,
   reduce: []ReduceVal,
 }
 ReduceVal :: struct {
@@ -102,16 +104,24 @@ make_globals :: proc(g: Grammar, table: Table) -> Globals {
   }
 
   for i in 0..<len(table) {
-    lah := make([]LookaheadVal, len(table[i]))
-    globals.state[i] = { i, lah }
+    lookup := make(map[Decision]int)
+    lah := make([dynamic]LookaheadVal)
 
-    j := 0
     for sym in 0..<len(g.symbols) {
       symbol := Symbol(sym)
       if !(symbol in table[i]) do continue
-      
-      defer j += 1
-      lah[j] = LookaheadVal { g.symbols[sym], nil, nil, nil }
+
+      if k, ok := lookup[table[i][symbol]]; ok {
+        clone := make([]string, len(lah[k].token) + 1)
+        copy(clone, lah[k].token)
+        clone[len(clone) - 1] = g.symbols[sym]
+        lah[k].token = clone
+        continue
+      }
+
+      j := len(lah)
+      lookup[table[i][symbol]] = j
+      append(&lah, LookaheadVal { make_single(g.symbols[sym]), nil, nil, nil })
 
       switch v in table[i][symbol] {
         case Reduce:
@@ -130,6 +140,8 @@ make_globals :: proc(g: Grammar, table: Table) -> Globals {
           lah[j].shift = make_single(int(v))
       }
     }
+
+    globals.state[i] = { i, lah[:] }
   }
   return globals
 }
@@ -139,7 +151,7 @@ get_child :: proc(val: Value, s: string) -> (Value, bool) {
     case LookaheadVal:
       switch s {
         case "token":
-          return v.token, true
+          return slice_to_val(v.token), true
         case "accept":
           return slice_to_val(v.accept), true
         case "shift":
@@ -215,7 +227,7 @@ eval :: proc(directives: []Directive, g: Grammar, table: Table) -> (s: string, o
   sb := strings.builder_make_none()
 
   dirs := directives
-  _eval(&sb, &stack, &dirs) or_return
+  _eval(&sb, &stack, &dirs, false) or_return
   return strings.to_string(sb), true
 }
 
@@ -233,28 +245,42 @@ _skip :: proc(directives: ^[]Directive) -> bool {
   return false
 }
 
-_eval :: proc(sb: ^strings.Builder, stack: ^[dynamic]StackElement, directives: ^[]Directive) -> bool {
+_eval :: proc(sb: ^strings.Builder, stack: ^[dynamic]StackElement, directives: ^[]Directive, last: bool) -> bool {
   for len(directives) > 0 {
     dir := directives[0]
     directives^ = directives[1:]
 
+    ends_with :: proc(s: $T/[]$E, e: E) -> bool {
+      return len(s) > 0 && s[len(s) - 1] == e
+    }
+
     switch v in dir {
       case Write:
-        fmt.sbprint(sb, v.before)
+        if v.separator && last do continue
+
+        if v.newline && len(sb.buf) > 0 && !ends_with(sb.buf[:], '\n') {
+          fmt.sbprintln(sb)
+        }
+
+        if strings.trim_space(v.before) != {} || ends_with(sb.buf[:], '\n') {
+          fmt.sbprint(sb, v.before)
+        }
+
         fmt.sbprint(sb, v.after)
         for varlit in v.vars {
           val := get_value(varlit.var, stack[:]) or_return
           print_value(sb, val) or_return
           fmt.sbprint(sb, varlit.lit)
         }
-        fmt.sbprintln(sb)
+
+        if v.newline do fmt.sbprintln(sb)
       case Start:
         slice := (get_value(v.var, stack[:]) or_return).(ValueSlice) or_return
         it := ValueIterator{ 0, slice }
-        for val in iterate_values(&it) {
+        for val, idx in iterate_values(&it) {
           append(stack, StackElement{ v.name, val })
           dirs := directives^;
-          _eval(sb, stack, &dirs) or_return
+          _eval(sb, stack, &dirs, idx == len(slice.slice) - 1) or_return
           pop(stack)
         }
         _skip(directives) or_return
@@ -274,7 +300,7 @@ parse_template :: proc(template, prefix: string) -> ([]Directive, bool) {
   for line in lines {
     i := strings.index(line, prefix)
     if i == -1 {
-      append(&directives, Write{line, {}, {}})
+      append(&directives, Write{ line, {}, {}, true, false })
       continue
     }
 
@@ -288,12 +314,12 @@ parse_template :: proc(template, prefix: string) -> ([]Directive, bool) {
     switch word {
       case "":
         continue
-      case "w":
+      case "l", "w", "s":
         // write
         next := directive[2:]
         index := strings.index(next, "${")
         if index == -1 {
-          append(&directives, Write{ literal, next, {} })
+          append(&directives, Write{ literal, next, {}, word == "l", word == "s" })
           continue
         }
 
@@ -314,10 +340,10 @@ parse_template :: proc(template, prefix: string) -> ([]Directive, bool) {
           append(&entries, WriteEntry{ var, lit })
         }
 
-        append(&directives, Write{ literal, first, entries[:] })
+        append(&directives, Write{ literal, first, entries[:], word == "l", word == "s" })
       case "e":
         // end
-        if strings.trim_space(literal) != {} do append(&directives, Write{ literal, {}, {} })
+        if strings.trim_space(literal) != {} do append(&directives, Write{ literal, {}, {}, true, false })
         append(&directives, End{})
       case "d":
         // delete
@@ -333,6 +359,7 @@ parse_template :: proc(template, prefix: string) -> ([]Directive, bool) {
           if (space != -1) do name = name[0:space]
         }
 
+        if strings.trim_space(literal) != {} do append(&directives, Write{ literal, {}, {}, true, false })
         append(&directives, Start{ var, name })
     }
   }
