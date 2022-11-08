@@ -38,7 +38,19 @@ main :: proc() {
   empty := calc_empty_set(g)
   first := calc_first_sets(g, empty)
   follow := calc_follow_sets(g, first, empty)
+  
+  print_lookahead_table(g, first)
+  fmt.println()
+  print_lookahead_table(g, follow)
+  fmt.println()
 
-  table := calc_table(g, type, first, follow)
+  table := calc_table(g, type, empty, first, follow)
   print_table(g, table)
+  fmt.println()
+ 
+  template, _ := os.read_entire_file("templates/template.odin")
+  dirs,     _ := parse_template(transmute(string)template, "//")
+
+  e, _ := eval(dirs, g, table)
+  os.write_entire_file("out", transmute([]byte)e)
 }

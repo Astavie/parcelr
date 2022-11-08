@@ -22,7 +22,7 @@ Shift  :: distinct int  // number refers to state
 
 Analyser :: enum { LR0, SLR1, CLR1, LALR1 }
 
-predict :: proc(g : Grammar, type : Analyser, set : []Item, first : []Lookahead, follow : []Lookahead) -> []Item {
+predict :: proc(g : Grammar, type : Analyser, set : []Item, empty: map[Symbol]void, first : []Lookahead, follow : []Lookahead) -> []Item {
   stack      := slice.clone_to_dynamic(set)
   prediction := slice.clone_to_dynamic(set)
 
@@ -35,8 +35,13 @@ predict :: proc(g : Grammar, type : Analyser, set : []Item, first : []Lookahead,
     if len(rhs) <= item.index do continue
 
     sym := rhs[item.index]
-    lah := item.lookahead
-    if len(rhs) > item.index + 1 do lah = first[rhs[item.index + 1]]
+    lah := Lookahead{}
+    i := item.index + 1
+    for ; i < len(rhs); i += 1 {
+      lah += first[rhs[i]]
+      if !(rhs[i] in empty) do break
+    }
+    if i == len(rhs) do lah += item.lookahead
 
     a: for def, idx in g.rules {
       if sym != def.lhs do continue
@@ -48,7 +53,11 @@ predict :: proc(g : Grammar, type : Analyser, set : []Item, first : []Lookahead,
 
           for prev, idx in prediction {
             if prev.rule == item.rule && prev.index == item.index {
-              prediction[idx].lookahead += lah
+              // still evaluate an equivalent item if its lookahead contains new elements
+              if !(prev.lookahead >= lah) {
+                prediction[idx].lookahead += lah
+                append(&stack, item)
+              }
               continue a
             }
           }
@@ -137,7 +146,7 @@ indexof_slice :: proc(a : $T/[][]$E, b : []E) -> (int, bool) {
   return ---, false
 }
 
-calc_table :: proc(g : Grammar, type : Analyser, first : []Lookahead, follow : []Lookahead) -> Table {
+calc_table :: proc(g : Grammar, type : Analyser, empty: map[Symbol]void, first : []Lookahead, follow : []Lookahead) -> Table {
   
   StackEntry :: struct {
     set   : []Item,
@@ -153,7 +162,7 @@ calc_table :: proc(g : Grammar, type : Analyser, first : []Lookahead, follow : [
 
   table    := make([dynamic]map[Symbol]Decision)
   stack    := make([dynamic]StackEntry)
-  start    := predict(g, type, {{ Rule(0), 0, { EOF } }}, first, follow)
+  start    := predict(g, type, {{ Rule(0), 0, { EOF } }}, empty, first, follow)
   append(&stack, StackEntry { start, 0 })
   append(&table, make(map[Symbol]Decision))
   
@@ -175,7 +184,7 @@ calc_table :: proc(g : Grammar, type : Analyser, first : []Lookahead, follow : [
     set   := entry.set
     i     := entry.index
  
-    pset := predict(g, type, set, first, follow)
+    pset := predict(g, type, set, empty, first, follow)
     defer delete(pset)
 
     part := partition(g, pset)
@@ -307,13 +316,15 @@ calc_follow_sets :: proc(g : Grammar, first : []Lookahead, empty : map[Symbol]vo
 
   defer delete(routes)
 
+  symbols[ROOT] += { EOF }
+
   for rule in g.rules {
     for symbol, idx in rule.rhs {
       max := idx + 1
-      for symb2, idx2 in rule.rhs[max:] {
+      for symb2 in rule.rhs[max:] {
         symbols[symbol] += first[symb2]
         if !(symb2 in empty) do break
-        max = idx2 + 1
+        max += 1
       }
       if (max == len(rule.rhs)) {
         routes[{ symbol, rule.lhs }] = {}
