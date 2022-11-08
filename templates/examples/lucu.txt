@@ -1,0 +1,101 @@
+# CALL is inserted before "(" if the previous token was on the same line and does not disallow CALL insertion
+# the following tokens disallow CALL insertion:
+# prefix unary operators
+# binary operators
+# "_do"
+
+lucu -> definition lucu .
+lucu -> .
+
+definition -> _context id typeorvalue .
+definition -> _val  id typeorvalue .
+definition -> _decl id type _eq expr .
+definition -> _decl id _eq expr .
+definition -> _fun id inputs _do expr .
+definition -> _fun id inputs outputs block .
+definition -> _fun id inputs block .
+
+typeorvalue -> type _eq expr .
+typeorvalue -> type .
+typeorvalue -> _eq expr .
+
+inputs -> CALL _po _pc .
+inputs -> CALL _po param params _pc .
+params -> _c param params .
+params -> .
+param -> id typeorvalue .
+param -> ids type .
+param -> _ctx id .
+outputs -> ret .
+outputs -> CALL _po _pc .
+outputs -> CALL _po ret rets _pc .
+rets -> _c ret rets .
+rets -> .
+ret -> type .
+ret -> _ctx id .
+
+closure -> _pipe id _pipe .
+closure -> .
+funlit -> _fun closure inputs _do expr .
+funlit -> _fun closure inputs outputs block .
+funlit -> _fun closure inputs block .
+
+ids -> id _c id .
+ids -> ids _c id .
+
+type -> _ref type .
+type -> _fun inputs outputs .
+type -> id .
+
+assop -> _concateq .
+assop -> _eq .
+
+stmnt -> block .
+stmnt -> definition .
+stmnt -> asslhs assop expr .
+stmnt -> _if expr4 _do stmnt .
+stmnt -> _if expr4 block elseblock .
+stmnt -> _break .
+stmnt -> _return expr .
+
+elseblock -> .
+elseblock -> _else block .
+elseblock -> _else _if expr4 block elseblock .
+
+# funlit is always at the end of an expression
+expr ->                 funlit .
+expr -> expr3 _else     funlit .
+expr -> _if expr4 _then funlit .
+expr -> expr2 _concat   funlit .
+expr -> expr4 .
+
+expr4 -> expr3 .
+expr4 -> expr3 _else expr4 .
+
+expr3 -> expr2 .
+expr3 -> _if expr4 block .
+expr3 -> _if expr4 _then expr3 .
+
+expr2 -> expr1 .
+expr2 -> expr2 _concat expr1 .
+
+asslhs -> id .
+asslhs -> expr1 _ref .
+asslhs -> expr1 _dot id .
+expr1 -> block .
+expr1 -> asslhs .
+expr1 -> arglist .
+expr1 -> __stack .
+expr1 -> stringlit .
+expr1 -> expr1 CALL arglist .
+
+arglist -> _po arg args _pc .
+arglist -> _po _pc .
+args -> _c arg args .
+args -> .
+arg -> expr .
+arg -> id _eq expr .
+
+block -> _bo stmnts _bc .
+stmnts -> stmnts stmnt .
+stmnts -> .
