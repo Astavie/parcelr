@@ -15,9 +15,10 @@ RuleDefinition :: struct {
 }
 
 Grammar :: struct {
-  rules   : []RuleDefinition,
-  symbols : []string,
-  lexemes : []Symbol,
+  rules      : []RuleDefinition,
+  enum_names : []string,
+  symbols    : []string,
+  lexemes    : []Symbol,
 }
 
 ROOT :: Symbol(0)
@@ -25,8 +26,9 @@ EOF  :: Lexeme(0)
 
 void :: struct{}
 
-parse :: proc(d : []u8) -> (Grammar, bool) {
+parse :: proc(d: []u8) -> (Grammar, bool) {
   rules      := make([dynamic]RuleDefinition)
+  enum_names := make([dynamic]string)
   names      := make([dynamic]string)
   nonlexemes := make(map[Symbol]void)
   defer delete(nonlexemes)
@@ -38,20 +40,34 @@ parse :: proc(d : []u8) -> (Grammar, bool) {
   append(&rules, RuleDefinition { ROOT, rhs })
   append(&names, "ROOT")
   append(&names, "EOF")
+  append(&enum_names, "")
+  append(&enum_names, "EOF")
 
   nonlexemes[ROOT] = {}
 
-  get_symbol :: proc(names : ^[dynamic]string, token : string) -> Symbol {
-    for name, idx in names {
-      if token == name {
+  get_symbol :: proc(names: ^[dynamic]string, enum_names: ^[dynamic]string, token: string) -> Symbol {
+    name : string
+    enum_name : string
+    if token[0] == '"' && token[len(token) - 1] == '"' {
+      name = strings.clone(token[1:len(token) - 1])
+      enum_name = fmt.aprintf("_%i", len(enum_names))
+    } else {
+      name = strings.clone(token)
+      enum_name = strings.clone(token)
+    }
+    for name2, idx in names {
+      if name == name2 {
+        delete(name)
+        delete(enum_name)
         return Symbol(idx)
       }
     }
-    append(names, strings.clone(token))
+    append(names,      name)
+    append(enum_names, enum_name)
     return Symbol(len(names) - 1)
   }
 
-  parse_token :: proc(data : []u8) -> (string, []u8) {
+  parse_token :: proc(data: []u8) -> (string, []u8) {
     // skip whitespace
     start := 0
     a: for len(data) > start {
@@ -96,7 +112,7 @@ parse :: proc(d : []u8) -> (Grammar, bool) {
       if token != "->" do panic("'->' expected")
     }
     
-    lhs := get_symbol(&names, token)
+    lhs := get_symbol(&names, &enum_names, token)
     rhs := make([dynamic]Symbol)
 
     nonlexemes[lhs] = {}
@@ -108,7 +124,7 @@ parse :: proc(d : []u8) -> (Grammar, bool) {
       if token == "."                 do break
       if token == "" || token == "->" do panic("rhs or '.' expected")
     
-      append(&rhs, get_symbol(&names, token))
+      append(&rhs, get_symbol(&names, &enum_names, token))
     }
 
     append(&rules, RuleDefinition { lhs, rhs[:] })
@@ -126,6 +142,7 @@ parse :: proc(d : []u8) -> (Grammar, bool) {
 
   return {
     rules[:],
+    enum_names[:],
     names[:],
     lexemes,
   }, true

@@ -29,22 +29,27 @@ End :: distinct void
 
 Directive :: union #no_nil { Start, Write, End }
 
+Token :: struct {
+  name:       string,
+  enum_value: string,
+}
+
 LookaheadVal :: struct {
-  token:  []string,
+  symbol: []Token,
   accept: []void,
   shift:  []int,
   reduce: []ReduceVal,
 }
 ReduceVal :: struct {
-  lhs: string,
-  rhs: []string,
+  lhs: Token,
+  rhs: []Token,
 }
 StateVal :: struct {
   index: int,
   lookahead: []LookaheadVal,
 }
 
-Value      :: union #no_nil { void, int, string, LookaheadVal, ReduceVal, StateVal, ValueSlice }
+Value      :: union #no_nil { void, int, string, LookaheadVal, ReduceVal, StateVal, Token, ValueSlice }
 ValueSlice :: struct { type: u8, slice: []void }
 
 ValueIterator :: struct {
@@ -75,9 +80,9 @@ iterate_values :: proc(it: ^ValueIterator) -> (val: Value, idx: int, cond: bool)
 }
 
 Globals :: struct {
-  state: []StateVal,
-  token: []string,
-  lexeme: []string,
+  state:  []StateVal,
+  symbol: []Token,
+  lexeme: []Token,
 }
 
 slice_to_val :: proc(s: $T/[]$E) -> Value {
@@ -97,14 +102,28 @@ make_single :: proc(e: $E) -> []E {
 }
 
 make_globals :: proc(g: Grammar, table: Table) -> Globals {
-  globals := Globals { make([]StateVal, len(table)), g.symbols[1:], make([]string, len(g.lexemes) - 1) }
+  zip :: proc(a: $T/[]$A, b: $U/[]$B, f: proc(a: A, b: B) -> $C) -> []C {
+    ret := make([]C, min(len(a), len(b)))
+    for _, i in ret {
+      ret[i] = f(a[i], b[i])
+    }
+    return ret
+  }
+
+  globals := Globals {
+    make([]StateVal, len(table)),
+    zip(g.symbols[1:], g.enum_names[1:],
+      proc(a, b: string) -> Token { return Token{ a, b } }),
+    make([]Token, len(g.lexemes) - 1),
+  }
 
   for lex, i in g.lexemes[1:] {
-    globals.lexeme[i] = g.symbols[lex]
+    globals.lexeme[i] = Token { g.symbols[lex], g.enum_names[lex] }
   }
 
   for i in 0..<len(table) {
     lookup := make(map[Decision]int)
+    defer delete(lookup)
     lah := make([dynamic]LookaheadVal)
 
     for sym in 0..<len(g.symbols) {
@@ -112,16 +131,16 @@ make_globals :: proc(g: Grammar, table: Table) -> Globals {
       if !(symbol in table[i]) do continue
 
       if k, ok := lookup[table[i][symbol]]; ok {
-        clone := make([]string, len(lah[k].token) + 1)
-        copy(clone, lah[k].token)
-        clone[len(clone) - 1] = g.symbols[sym]
-        lah[k].token = clone
+        clone := make([]Token, len(lah[k].symbol) + 1)
+        copy(clone, lah[k].symbol)
+        clone[len(clone) - 1] = { g.symbols[sym], g.enum_names[sym] }
+        lah[k].symbol = clone
         continue
       }
 
       j := len(lah)
       lookup[table[i][symbol]] = j
-      append(&lah, LookaheadVal { make_single(g.symbols[sym]), nil, nil, nil })
+      append(&lah, LookaheadVal { make_single(Token{ g.symbols[sym], g.enum_names[sym] }), nil, nil, nil })
 
       switch v in table[i][symbol] {
         case Reduce:
@@ -129,10 +148,10 @@ make_globals :: proc(g: Grammar, table: Table) -> Globals {
             lah[j].accept = make_single(void{})
           } else {
             rule := g.rules[v]
-            lhs := g.symbols[rule.lhs]
-            rhs := make([]string, len(rule.rhs))
+            lhs := Token{ g.symbols[rule.lhs], g.enum_names[rule.lhs] }
+            rhs := make([]Token, len(rule.rhs))
             for k in 0..<len(rhs) {
-              rhs[k] = g.symbols[rule.rhs[k]]
+              rhs[k] = { g.symbols[rule.rhs[k]], g.enum_names[rule.rhs[k]] }
             }
             lah[j].reduce = make_single(ReduceVal{ lhs, rhs })
           }
@@ -150,8 +169,8 @@ get_child :: proc(val: Value, s: string) -> (Value, bool) {
   #partial switch v in val {
     case LookaheadVal:
       switch s {
-        case "token":
-          return slice_to_val(v.token), true
+        case "symbol":
+          return slice_to_val(v.symbol), true
         case "accept":
           return slice_to_val(v.accept), true
         case "shift":
@@ -172,6 +191,13 @@ get_child :: proc(val: Value, s: string) -> (Value, bool) {
           return v.index, true
         case "lookahead":
           return slice_to_val(v.lookahead), true
+      }
+    case Token:
+      switch s {
+        case "name":
+          return v.name, true
+        case "enum":
+          return v.enum_value, true
       }
     case ValueSlice:
       switch s {
@@ -200,13 +226,6 @@ print_value :: proc(sb: ^strings.Builder, val: Value) -> bool {
     case int, string:
       fmt.sbprint(sb, v)
       return true
-    case ValueSlice:
-      it := ValueIterator{ 0, v }
-      for e, i in iterate_values(&it) {
-        if i > 0 do fmt.sbprint(sb, ",")
-        fmt.sbprint(sb, e)
-      }
-      return true
   }
   return false
 }
@@ -221,7 +240,7 @@ eval :: proc(directives: []Directive, g: Grammar, table: Table) -> (s: string, o
 
   stack := make([dynamic]StackElement)
   append(&stack, StackElement{ "state",  slice_to_val(globals.state)  })
-  append(&stack, StackElement{ "token",  slice_to_val(globals.token)  })
+  append(&stack, StackElement{ "symbol", slice_to_val(globals.symbol) })
   append(&stack, StackElement{ "lexeme", slice_to_val(globals.lexeme) })
 
   sb := strings.builder_make_none()
@@ -256,9 +275,7 @@ _eval :: proc(sb: ^strings.Builder, stack: ^[dynamic]StackElement, directives: ^
 
     switch v in dir {
       case Write:
-        if v.separator && last do continue
-
-        if v.newline && len(sb.buf) > 0 && !ends_with(sb.buf[:], '\n') {
+        if v.newline && len(sb.buf) > 0 {
           fmt.sbprintln(sb)
         }
 
@@ -266,14 +283,14 @@ _eval :: proc(sb: ^strings.Builder, stack: ^[dynamic]StackElement, directives: ^
           fmt.sbprint(sb, v.before)
         }
 
+        if v.separator && last do continue
+
         fmt.sbprint(sb, v.after)
         for varlit in v.vars {
           val := get_value(varlit.var, stack[:]) or_return
           print_value(sb, val) or_return
           fmt.sbprint(sb, varlit.lit)
         }
-
-        if v.newline do fmt.sbprintln(sb)
       case Start:
         slice := (get_value(v.var, stack[:]) or_return).(ValueSlice) or_return
         it := ValueIterator{ 0, slice }
