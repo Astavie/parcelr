@@ -36,7 +36,7 @@ PARCELR_DEBUG :: true
 
 when PARCELR_DEBUG {
   main :: proc() {
-    symbols := make([dynamic]Symbol) 
+    symbols := make([dynamic]Symbol)
     if len(os.args) >= 2 {
       for s in os.args[1:] {
         for w in strings.split(s, " ") {
@@ -56,7 +56,7 @@ when PARCELR_DEBUG {
               fmt.printf("Unknown token '%s'\n", w)
               return
           }
-        } 
+        }
       }
     }
     fmt.println(symbol_name(parse(symbols[:])))
@@ -68,7 +68,7 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
   slice.reverse(stack[:])
 
   State :: struct { symbol: Symbol, state: int }
-  
+
   shifted := make([dynamic]State)
   state := 0
 
@@ -100,9 +100,9 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
   for {
     when PARCELR_DEBUG {
       for s in shifted {
-        fmt.printf("\u001b[90m%2i\u001b[0m %s ", s.state, symbol_name(s.symbol))
+        fmt.printf("\u001b[90m%i\u001b[0m %s ", s.state, symbol_name(s.symbol))
       }
-      fmt.printf("\u001b[100m%2i", state)
+      fmt.printf("\u001b[100m%i", state)
       for i := len(stack) - 1; i >= 0; i -= 1 {
         fmt.printf(" %s\u001b[0m", symbol_name(stack[i]))
       }
@@ -139,15 +139,16 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case ._10:
             shift(&stack, &shifted, &state, 9)
             continue
-          case ._11:
-            shift(&stack, &shifted, &state, 11)
-            continue
           case ._17:
             shift(&stack, &shifted, &state, 10)
             continue
+          case ._11:
+            shift(&stack, &shifted, &state, 11)
+            continue
           case:
-            symbols :: [?]Symbol{ .json, .value, .object, .array, .string, .number, ._8, ._9, ._10, ._11, ._17 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .json, .value, .object, .array, .string, .number, ._8, ._9, ._10, ._17, ._11 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 1:
         #partial switch symbol {
@@ -155,90 +156,113 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
             return shifted[0].symbol
           case:
             symbols :: [?]Symbol{ .EOF }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 2:
         #partial switch symbol {
           case .EOF:
+            when PARCELR_DEBUG { fmt.println("reduce json -> value .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.json })
             continue
           case:
             symbols :: [?]Symbol{ .EOF }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 3:
         #partial switch symbol {
-          case .EOF, ._12, ._15, ._18:
+          case .EOF, ._15, ._18, ._12:
+            when PARCELR_DEBUG { fmt.println("reduce value -> object .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
           case:
-            symbols :: [?]Symbol{ .EOF, ._12, ._15, ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 4:
         #partial switch symbol {
-          case .EOF, ._12, ._15, ._18:
+          case .EOF, ._15, ._18, ._12:
+            when PARCELR_DEBUG { fmt.println("reduce value -> array .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
           case:
-            symbols :: [?]Symbol{ .EOF, ._12, ._15, ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 5:
         #partial switch symbol {
-          case .EOF, ._12, ._15, ._18:
+          case .EOF, ._15, ._18, ._12:
+            when PARCELR_DEBUG { fmt.println("reduce value -> string .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
           case:
-            symbols :: [?]Symbol{ .EOF, ._12, ._15, ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 6:
         #partial switch symbol {
-          case .EOF, ._12, ._15, ._18:
+          case .EOF, ._15, ._18, ._12:
+            when PARCELR_DEBUG { fmt.println("reduce value -> number .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
           case:
-            symbols :: [?]Symbol{ .EOF, ._12, ._15, ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 7:
         #partial switch symbol {
-          case .EOF, ._12, ._15, ._18:
+          case .EOF, ._15, ._18, ._12:
+            when PARCELR_DEBUG { fmt.println("reduce value -> true .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
           case:
-            symbols :: [?]Symbol{ .EOF, ._12, ._15, ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 8:
         #partial switch symbol {
-          case .EOF, ._12, ._15, ._18:
+          case .EOF, ._15, ._18, ._12:
+            when PARCELR_DEBUG { fmt.println("reduce value -> false .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
           case:
-            symbols :: [?]Symbol{ .EOF, ._12, ._15, ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 9:
         #partial switch symbol {
-          case .EOF, ._12, ._15, ._18:
+          case .EOF, ._15, ._18, ._12:
+            when PARCELR_DEBUG { fmt.println("reduce value -> null .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
           case:
-            symbols :: [?]Symbol{ .EOF, ._12, ._15, ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 10:
         #partial switch symbol {
+          case ._18:
+            shift(&stack, &shifted, &state, 12)
+            continue
+          case .values:
+            shift(&stack, &shifted, &state, 13)
+            continue
           case .value:
             shift(&stack, &shifted, &state, 14)
             continue
@@ -263,27 +287,19 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case ._10:
             shift(&stack, &shifted, &state, 9)
             continue
-          case ._11:
-            shift(&stack, &shifted, &state, 11)
-            continue
           case ._17:
             shift(&stack, &shifted, &state, 10)
             continue
-          case ._18:
-            shift(&stack, &shifted, &state, 12)
-            continue
-          case .values:
-            shift(&stack, &shifted, &state, 13)
+          case ._11:
+            shift(&stack, &shifted, &state, 11)
             continue
           case:
-            symbols :: [?]Symbol{ .value, .object, .array, .string, .number, ._8, ._9, ._10, ._11, ._17, ._18, .values }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ ._18, .values, .value, .object, .array, .string, .number, ._8, ._9, ._10, ._17, ._11 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 11:
         #partial switch symbol {
-          case .string:
-            shift(&stack, &shifted, &state, 18)
-            continue
           case ._12:
             shift(&stack, &shifted, &state, 15)
             continue
@@ -293,19 +309,25 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .member:
             shift(&stack, &shifted, &state, 17)
             continue
+          case .string:
+            shift(&stack, &shifted, &state, 18)
+            continue
           case:
-            symbols :: [?]Symbol{ .string, ._12, .members, .member }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ ._12, .members, .member, .string }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 12:
         #partial switch symbol {
-          case .EOF, ._12, ._15, ._18:
+          case .EOF, ._15, ._18, ._12:
+            when PARCELR_DEBUG { fmt.println("reduce array -> [ ] .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [2]Symbol) -> Symbol { return Symbol.array })
             continue
           case:
-            symbols :: [?]Symbol{ .EOF, ._12, ._15, ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 13:
         #partial switch symbol {
@@ -314,30 +336,35 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
             continue
           case:
             symbols :: [?]Symbol{ ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 14:
         #partial switch symbol {
-          case ._15:
-            shift(&stack, &shifted, &state, 20)
-            continue
           case ._18:
+            when PARCELR_DEBUG { fmt.println("reduce values -> value .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.values })
             continue
+          case ._15:
+            shift(&stack, &shifted, &state, 20)
+            continue
           case:
-            symbols :: [?]Symbol{ ._15, ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ ._18, ._15 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 15:
         #partial switch symbol {
-          case .EOF, ._12, ._15, ._18:
+          case .EOF, ._15, ._18, ._12:
+            when PARCELR_DEBUG { fmt.println("reduce object -> { } .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [2]Symbol) -> Symbol { return Symbol.object })
             continue
           case:
-            symbols :: [?]Symbol{ .EOF, ._12, ._15, ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 16:
         #partial switch symbol {
@@ -346,11 +373,13 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
             continue
           case:
             symbols :: [?]Symbol{ ._12 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 17:
         #partial switch symbol {
           case ._12:
+            when PARCELR_DEBUG { fmt.println("reduce members -> member .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.members })
             continue
@@ -359,7 +388,8 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
             continue
           case:
             symbols :: [?]Symbol{ ._12, ._15 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 18:
         #partial switch symbol {
@@ -368,20 +398,26 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
             continue
           case:
             symbols :: [?]Symbol{ ._16 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 19:
         #partial switch symbol {
-          case .EOF, ._12, ._15, ._18:
+          case .EOF, ._15, ._18, ._12:
+            when PARCELR_DEBUG { fmt.println("reduce array -> [ values ] .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [3]Symbol) -> Symbol { return Symbol.array })
             continue
           case:
-            symbols :: [?]Symbol{ .EOF, ._12, ._15, ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 20:
         #partial switch symbol {
+          case .values:
+            shift(&stack, &shifted, &state, 24)
+            continue
           case .value:
             shift(&stack, &shifted, &state, 14)
             continue
@@ -406,43 +442,44 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case ._10:
             shift(&stack, &shifted, &state, 9)
             continue
-          case ._11:
-            shift(&stack, &shifted, &state, 11)
-            continue
           case ._17:
             shift(&stack, &shifted, &state, 10)
             continue
-          case .values:
-            shift(&stack, &shifted, &state, 24)
+          case ._11:
+            shift(&stack, &shifted, &state, 11)
             continue
           case:
-            symbols :: [?]Symbol{ .value, .object, .array, .string, .number, ._8, ._9, ._10, ._11, ._17, .values }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .values, .value, .object, .array, .string, .number, ._8, ._9, ._10, ._17, ._11 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 21:
         #partial switch symbol {
-          case .EOF, ._12, ._15, ._18:
+          case .EOF, ._15, ._18, ._12:
+            when PARCELR_DEBUG { fmt.println("reduce object -> { members } .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [3]Symbol) -> Symbol { return Symbol.object })
             continue
           case:
-            symbols :: [?]Symbol{ .EOF, ._12, ._15, ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 22:
         #partial switch symbol {
-          case .string:
-            shift(&stack, &shifted, &state, 18)
-            continue
           case .members:
             shift(&stack, &shifted, &state, 25)
             continue
           case .member:
             shift(&stack, &shifted, &state, 17)
             continue
+          case .string:
+            shift(&stack, &shifted, &state, 18)
+            continue
           case:
-            symbols :: [?]Symbol{ .string, .members, .member }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .members, .member, .string }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 23:
         #partial switch symbol {
@@ -470,45 +507,52 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case ._10:
             shift(&stack, &shifted, &state, 9)
             continue
-          case ._11:
-            shift(&stack, &shifted, &state, 11)
-            continue
           case ._17:
             shift(&stack, &shifted, &state, 10)
             continue
+          case ._11:
+            shift(&stack, &shifted, &state, 11)
+            continue
           case:
-            symbols :: [?]Symbol{ .value, .object, .array, .string, .number, ._8, ._9, ._10, ._11, ._17 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            symbols :: [?]Symbol{ .value, .object, .array, .string, .number, ._8, ._9, ._10, ._17, ._11 }
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 24:
         #partial switch symbol {
           case ._18:
+            when PARCELR_DEBUG { fmt.println("reduce values -> value , values .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [3]Symbol) -> Symbol { return Symbol.values })
             continue
           case:
             symbols :: [?]Symbol{ ._18 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 25:
         #partial switch symbol {
           case ._12:
+            when PARCELR_DEBUG { fmt.println("reduce members -> member , members .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [3]Symbol) -> Symbol { return Symbol.members })
             continue
           case:
             symbols :: [?]Symbol{ ._12 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
       case 26:
         #partial switch symbol {
           case ._12, ._15:
+            when PARCELR_DEBUG { fmt.println("reduce member -> string : value .") }
             reduce(&stack, &shifted, &state,
               proc (symbols: [3]Symbol) -> Symbol { return Symbol.member })
             continue
           case:
             symbols :: [?]Symbol{ ._12, ._15 }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
     }
   }

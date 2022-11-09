@@ -40,12 +40,14 @@ LookaheadVal :: struct {
   shift:  []int,
   reduce: []ReduceVal,
 }
+
 ReduceVal :: struct {
   lhs: Token,
   rhs: []Token,
 }
+
 StateVal :: struct {
-  index: int,
+  index:     int,
   lookahead: []LookaheadVal,
 }
 
@@ -126,23 +128,20 @@ make_globals :: proc(g: Grammar, table: Table) -> Globals {
     defer delete(lookup)
     lah := make([dynamic]LookaheadVal)
 
-    for sym in 0..<len(g.symbols) {
-      symbol := Symbol(sym)
-      if !(symbol in table[i]) do continue
-
-      if k, ok := lookup[table[i][symbol]]; ok {
+    for symbol, decision in table[i] {
+      if k, ok := lookup[decision]; ok {
         clone := make([]Token, len(lah[k].symbol) + 1)
         copy(clone, lah[k].symbol)
-        clone[len(clone) - 1] = { g.symbols[sym], g.enum_names[sym] }
+        clone[len(clone) - 1] = { g.symbols[symbol], g.enum_names[symbol] }
         lah[k].symbol = clone
         continue
       }
 
       j := len(lah)
-      lookup[table[i][symbol]] = j
-      append(&lah, LookaheadVal { make_single(Token{ g.symbols[sym], g.enum_names[sym] }), nil, nil, nil })
+      lookup[decision] = j
+      append(&lah, LookaheadVal { make_single(Token{ g.symbols[symbol], g.enum_names[symbol] }), nil, nil, nil })
 
-      switch v in table[i][symbol] {
+      switch v in decision {
         case Reduce:
           if v == Reduce(START) {
             lah[j].accept = make_single(void{})
@@ -225,6 +224,13 @@ print_value :: proc(sb: ^strings.Builder, val: Value) -> bool {
   #partial switch v in val {
     case int, string:
       fmt.sbprint(sb, v)
+      return true
+    case ReduceVal:
+      fmt.sbprintf(sb, "%s -> ", v.lhs.name)
+      for token in v.rhs {
+        fmt.sbprintf(sb, "%s ", token.name)
+      }
+      fmt.sbprint(sb, ".")
       return true
   }
   return false

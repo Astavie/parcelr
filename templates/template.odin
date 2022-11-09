@@ -27,7 +27,7 @@ PARCELR_DEBUG :: true
 
 when PARCELR_DEBUG {
   main :: proc() {
-    symbols := make([dynamic]Symbol) 
+    symbols := make([dynamic]Symbol)
     if len(os.args) >= 2 {
       for s in os.args[1:] {
         for w in strings.split(s, " ") {
@@ -39,7 +39,7 @@ when PARCELR_DEBUG {
               fmt.printf("Unknown token '%s'\n", w)
               return
           }
-        } 
+        }
       }
     }
     fmt.println(symbol_name(parse(symbols[:])))
@@ -51,7 +51,7 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
   slice.reverse(stack[:])
 
   State :: struct { symbol: Symbol, state: int }
-  
+
   shifted := make([dynamic]State)
   state := 0
 
@@ -83,9 +83,9 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
   for {
     when PARCELR_DEBUG {
       for s in shifted {
-        fmt.printf("\u001b[90m%2i\u001b[0m %s ", s.state, symbol_name(s.symbol))
+        fmt.printf("\u001b[90m%i\u001b[0m %s ", s.state, symbol_name(s.symbol))
       }
-      fmt.printf("\u001b[100m%2i", state)
+      fmt.printf("\u001b[100m%i", state)
       for i := len(stack) - 1; i >= 0; i -= 1 {
         fmt.printf(" %s\u001b[0m", symbol_name(stack[i]))
       }
@@ -98,7 +98,7 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
       case 0: //d
         #partial switch symbol {
         //state.lookahead lah
-          //l case 
+          //l case
           //lah.symbol
             //w  .${symbol.enum}
             //s ,
@@ -112,6 +112,7 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
             //l continue
           //e
           //lah.reduce
+            //l when PARCELR_DEBUG { fmt.println("reduce ${reduce}") }
             //l reduce(&stack, &shifted, &state,
             //l   proc (symbols: [${reduce.rhs.length}]Symbol) -> Symbol { return Symbol.${reduce.lhs.enum} })
             //l continue
@@ -128,7 +129,8 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
               //s ,
             //e
             //w  }
-            panic(fmt.tprintf("Unexpected %v, expected %v", symbol, symbols))
+            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
+            return nil
         }
     //e
     }
