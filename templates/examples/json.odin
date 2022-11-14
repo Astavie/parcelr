@@ -5,29 +5,34 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-Symbol :: enum { EOF, json, value, object, array, string, number, _8, _9, _10, _11, _12, members, member, _15, _16, _17, _18, values }
+Symbol :: enum { EOF, ERR, json, value, object, array, string, number, _9, _10, _11, _12, _13, members, premembers, member, _17, _18, _19, _20, values, prevalues, }
+
+HANDLES_ERRORS := map[int]struct{}{ 10 = {}, 11 = {}, 14 = {}, 19 = {}, 26 = {}, 27 = {}, 31 = {}, 32 = {}, 36 = {}, 37 = {}, 39 = {}, 40 = {}, }
 
 symbol_name :: proc(symbol: Symbol) -> string {
   switch symbol {
-    case .EOF: return "EOF"
+    case .EOF: return "$"
+    case .ERR: return "error"
     case .json: return "json"
     case .value: return "value"
     case .object: return "object"
     case .array: return "array"
     case .string: return "string"
     case .number: return "number"
-    case ._8: return "true"
-    case ._9: return "false"
-    case ._10: return "null"
-    case ._11: return "{"
-    case ._12: return "}"
+    case ._9: return "true"
+    case ._10: return "false"
+    case ._11: return "null"
+    case ._12: return "{"
+    case ._13: return "}"
     case .members: return "members"
+    case .premembers: return "premembers"
     case .member: return "member"
-    case ._15: return ","
-    case ._16: return ":"
-    case ._17: return "["
-    case ._18: return "]"
+    case ._17: return ","
+    case ._18: return ":"
+    case ._19: return "["
+    case ._20: return "]"
     case .values: return "values"
+    case .prevalues: return "prevalues"
   }
   return ""
 }
@@ -41,20 +46,19 @@ when PARCELR_DEBUG {
       for s in os.args[1:] {
         for w in strings.split(s, " ") {
           switch w {
+            case "error": append(&symbols, Symbol.ERR)
             case "string": append(&symbols, Symbol.string)
             case "number": append(&symbols, Symbol.number)
-            case "true": append(&symbols, Symbol._8)
-            case "false": append(&symbols, Symbol._9)
-            case "null": append(&symbols, Symbol._10)
-            case "{": append(&symbols, Symbol._11)
-            case "}": append(&symbols, Symbol._12)
-            case ",": append(&symbols, Symbol._15)
-            case ":": append(&symbols, Symbol._16)
-            case "[": append(&symbols, Symbol._17)
-            case "]": append(&symbols, Symbol._18)
-            case:
-              fmt.printf("Unknown token '%s'\n", w)
-              return
+            case "true": append(&symbols, Symbol._9)
+            case "false": append(&symbols, Symbol._10)
+            case "null": append(&symbols, Symbol._11)
+            case "{": append(&symbols, Symbol._12)
+            case "}": append(&symbols, Symbol._13)
+            case ",": append(&symbols, Symbol._17)
+            case ":": append(&symbols, Symbol._18)
+            case "[": append(&symbols, Symbol._19)
+            case "]": append(&symbols, Symbol._20)
+            case: append(&symbols, Symbol.ERR)
           }
         }
       }
@@ -71,6 +75,7 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
 
   shifted := make([dynamic]State)
   state := 0
+  errors := 0
 
   defer delete(stack)
   defer delete(shifted)
@@ -81,18 +86,21 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
     return Symbol.EOF
   }
 
-  shift :: proc(stack: ^[dynamic]Symbol, shifted: ^[dynamic]State, state: ^int, new_state: int) {
-    append(shifted, State { pop_safe(stack) or_else Symbol.EOF, state^ })
+  shift :: proc(stack: ^[dynamic]Symbol, shifted: ^[dynamic]State, state: ^int, new_state: int, errors: ^int) {
+    symbol := pop_safe(stack) or_else Symbol.EOF
+    if symbol == .ERR do errors^ += 1
+    append(shifted, State { symbol, state^ })
     state^ = new_state
   }
 
-  reduce :: proc(stack: ^[dynamic]Symbol, shifted: ^[dynamic]State, state: ^int, f: $T/proc(symbols: [$N]Symbol) -> Symbol) {
+  reduce :: proc(stack: ^[dynamic]Symbol, shifted: ^[dynamic]State, state: ^int, errors: ^int, f: $T/proc(symbols: [$N]Symbol) -> Symbol) {
     symbols : [N]Symbol = ---
     when N > 0 {
       state^ = shifted[len(shifted) - N].state
     }
     for i := N - 1; i >= 0; i -= 1 {
       symbols[i] = pop(shifted).symbol
+      if symbols[i] == .ERR do errors^ -= 1
     }
     append(stack, f(symbols))
   }
@@ -106,454 +114,543 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
       for i := len(stack) - 1; i >= 0; i -= 1 {
         fmt.printf(" %s\u001b[0m", symbol_name(stack[i]))
       }
-      fmt.println(" $\u001b[0m")
+      fmt.printf(" %s\u001b[0m", symbol_name(.EOF))
+      fmt.println()
     }
     symbol := peek(stack[:])
     switch state {
       case 0:
         #partial switch symbol {
           case .json:
-            shift(&stack, &shifted, &state, 1)
+            shift(&stack, &shifted, &state, 1, &errors)
             continue
           case .value:
-            shift(&stack, &shifted, &state, 2)
+            shift(&stack, &shifted, &state, 2, &errors)
             continue
           case .object:
-            shift(&stack, &shifted, &state, 3)
+            shift(&stack, &shifted, &state, 3, &errors)
             continue
           case .array:
-            shift(&stack, &shifted, &state, 4)
+            shift(&stack, &shifted, &state, 4, &errors)
             continue
           case .string:
-            shift(&stack, &shifted, &state, 5)
+            shift(&stack, &shifted, &state, 5, &errors)
             continue
           case .number:
-            shift(&stack, &shifted, &state, 6)
-            continue
-          case ._8:
-            shift(&stack, &shifted, &state, 7)
+            shift(&stack, &shifted, &state, 6, &errors)
             continue
           case ._9:
-            shift(&stack, &shifted, &state, 8)
+            shift(&stack, &shifted, &state, 7, &errors)
             continue
           case ._10:
-            shift(&stack, &shifted, &state, 9)
-            continue
-          case ._17:
-            shift(&stack, &shifted, &state, 10)
+            shift(&stack, &shifted, &state, 8, &errors)
             continue
           case ._11:
-            shift(&stack, &shifted, &state, 11)
+            shift(&stack, &shifted, &state, 9, &errors)
             continue
-          case:
-            symbols :: [?]Symbol{ .json, .value, .object, .array, .string, .number, ._8, ._9, ._10, ._17, ._11 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
+          case ._19:
+            shift(&stack, &shifted, &state, 10, &errors)
+            continue
+          case ._12:
+            shift(&stack, &shifted, &state, 11, &errors)
+            continue
         }
       case 1:
         #partial switch symbol {
           case .EOF:
             return shifted[0].symbol
-          case:
-            symbols :: [?]Symbol{ .EOF }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 2:
         #partial switch symbol {
           case .EOF:
             when PARCELR_DEBUG { fmt.println("reduce json -> value .") }
-            reduce(&stack, &shifted, &state,
+            reduce(&stack, &shifted, &state, &errors,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.json })
             continue
-          case:
-            symbols :: [?]Symbol{ .EOF }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 3:
         #partial switch symbol {
-          case .EOF, ._15, ._18, ._12:
+          case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> object .") }
-            reduce(&stack, &shifted, &state,
+            reduce(&stack, &shifted, &state, &errors,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
-          case:
-            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 4:
         #partial switch symbol {
-          case .EOF, ._15, ._18, ._12:
+          case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> array .") }
-            reduce(&stack, &shifted, &state,
+            reduce(&stack, &shifted, &state, &errors,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
-          case:
-            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 5:
         #partial switch symbol {
-          case .EOF, ._15, ._18, ._12:
+          case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> string .") }
-            reduce(&stack, &shifted, &state,
+            reduce(&stack, &shifted, &state, &errors,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
-          case:
-            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 6:
         #partial switch symbol {
-          case .EOF, ._15, ._18, ._12:
+          case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> number .") }
-            reduce(&stack, &shifted, &state,
+            reduce(&stack, &shifted, &state, &errors,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
-          case:
-            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 7:
         #partial switch symbol {
-          case .EOF, ._15, ._18, ._12:
+          case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> true .") }
-            reduce(&stack, &shifted, &state,
+            reduce(&stack, &shifted, &state, &errors,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
-          case:
-            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 8:
         #partial switch symbol {
-          case .EOF, ._15, ._18, ._12:
+          case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> false .") }
-            reduce(&stack, &shifted, &state,
+            reduce(&stack, &shifted, &state, &errors,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
-          case:
-            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 9:
         #partial switch symbol {
-          case .EOF, ._15, ._18, ._12:
+          case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> null .") }
-            reduce(&stack, &shifted, &state,
+            reduce(&stack, &shifted, &state, &errors,
               proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
             continue
-          case:
-            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 10:
         #partial switch symbol {
-          case ._18:
-            shift(&stack, &shifted, &state, 12)
+          case ._20:
+            shift(&stack, &shifted, &state, 12, &errors)
             continue
           case .values:
-            shift(&stack, &shifted, &state, 13)
+            shift(&stack, &shifted, &state, 13, &errors)
+            continue
+          case .prevalues:
+            shift(&stack, &shifted, &state, 14, &errors)
             continue
           case .value:
-            shift(&stack, &shifted, &state, 14)
+            shift(&stack, &shifted, &state, 15, &errors)
+            continue
+          case .ERR:
+            shift(&stack, &shifted, &state, 16, &errors)
             continue
           case .object:
-            shift(&stack, &shifted, &state, 3)
+            shift(&stack, &shifted, &state, 3, &errors)
             continue
           case .array:
-            shift(&stack, &shifted, &state, 4)
+            shift(&stack, &shifted, &state, 4, &errors)
             continue
           case .string:
-            shift(&stack, &shifted, &state, 5)
+            shift(&stack, &shifted, &state, 5, &errors)
             continue
           case .number:
-            shift(&stack, &shifted, &state, 6)
-            continue
-          case ._8:
-            shift(&stack, &shifted, &state, 7)
+            shift(&stack, &shifted, &state, 6, &errors)
             continue
           case ._9:
-            shift(&stack, &shifted, &state, 8)
+            shift(&stack, &shifted, &state, 7, &errors)
             continue
           case ._10:
-            shift(&stack, &shifted, &state, 9)
-            continue
-          case ._17:
-            shift(&stack, &shifted, &state, 10)
+            shift(&stack, &shifted, &state, 8, &errors)
             continue
           case ._11:
-            shift(&stack, &shifted, &state, 11)
+            shift(&stack, &shifted, &state, 9, &errors)
             continue
-          case:
-            symbols :: [?]Symbol{ ._18, .values, .value, .object, .array, .string, .number, ._8, ._9, ._10, ._17, ._11 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
+          case ._19:
+            shift(&stack, &shifted, &state, 10, &errors)
+            continue
+          case ._12:
+            shift(&stack, &shifted, &state, 11, &errors)
+            continue
         }
       case 11:
         #partial switch symbol {
-          case ._12:
-            shift(&stack, &shifted, &state, 15)
+          case ._13:
+            shift(&stack, &shifted, &state, 17, &errors)
             continue
           case .members:
-            shift(&stack, &shifted, &state, 16)
+            shift(&stack, &shifted, &state, 18, &errors)
+            continue
+          case .premembers:
+            shift(&stack, &shifted, &state, 19, &errors)
             continue
           case .member:
-            shift(&stack, &shifted, &state, 17)
+            shift(&stack, &shifted, &state, 20, &errors)
+            continue
+          case .ERR:
+            shift(&stack, &shifted, &state, 21, &errors)
             continue
           case .string:
-            shift(&stack, &shifted, &state, 18)
+            shift(&stack, &shifted, &state, 22, &errors)
             continue
-          case:
-            symbols :: [?]Symbol{ ._12, .members, .member, .string }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 12:
         #partial switch symbol {
-          case .EOF, ._15, ._18, ._12:
+          case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce array -> [ ] .") }
-            reduce(&stack, &shifted, &state,
+            reduce(&stack, &shifted, &state, &errors,
               proc (symbols: [2]Symbol) -> Symbol { return Symbol.array })
             continue
-          case:
-            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 13:
         #partial switch symbol {
-          case ._18:
-            shift(&stack, &shifted, &state, 19)
+          case ._20:
+            shift(&stack, &shifted, &state, 23, &errors)
             continue
-          case:
-            symbols :: [?]Symbol{ ._18 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 14:
         #partial switch symbol {
-          case ._18:
-            when PARCELR_DEBUG { fmt.println("reduce values -> value .") }
-            reduce(&stack, &shifted, &state,
-              proc (symbols: [1]Symbol) -> Symbol { return Symbol.values })
+          case .ERR:
+            shift(&stack, &shifted, &state, 24, &errors)
             continue
-          case ._15:
-            shift(&stack, &shifted, &state, 20)
+          case .value:
+            shift(&stack, &shifted, &state, 25, &errors)
             continue
-          case:
-            symbols :: [?]Symbol{ ._18, ._15 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
+          case .object:
+            shift(&stack, &shifted, &state, 3, &errors)
+            continue
+          case .array:
+            shift(&stack, &shifted, &state, 4, &errors)
+            continue
+          case .string:
+            shift(&stack, &shifted, &state, 5, &errors)
+            continue
+          case .number:
+            shift(&stack, &shifted, &state, 6, &errors)
+            continue
+          case ._9:
+            shift(&stack, &shifted, &state, 7, &errors)
+            continue
+          case ._10:
+            shift(&stack, &shifted, &state, 8, &errors)
+            continue
+          case ._11:
+            shift(&stack, &shifted, &state, 9, &errors)
+            continue
+          case ._19:
+            shift(&stack, &shifted, &state, 10, &errors)
+            continue
+          case ._12:
+            shift(&stack, &shifted, &state, 11, &errors)
+            continue
         }
       case 15:
         #partial switch symbol {
-          case .EOF, ._15, ._18, ._12:
-            when PARCELR_DEBUG { fmt.println("reduce object -> { } .") }
-            reduce(&stack, &shifted, &state,
-              proc (symbols: [2]Symbol) -> Symbol { return Symbol.object })
+          case ._20:
+            when PARCELR_DEBUG { fmt.println("reduce values -> value .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [1]Symbol) -> Symbol { return Symbol.values })
             continue
-          case:
-            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
+          case ._17:
+            shift(&stack, &shifted, &state, 26, &errors)
+            continue
         }
       case 16:
         #partial switch symbol {
-          case ._12:
-            shift(&stack, &shifted, &state, 21)
+          case ._17:
+            shift(&stack, &shifted, &state, 27, &errors)
             continue
-          case:
-            symbols :: [?]Symbol{ ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 17:
         #partial switch symbol {
-          case ._12:
-            when PARCELR_DEBUG { fmt.println("reduce members -> member .") }
-            reduce(&stack, &shifted, &state,
-              proc (symbols: [1]Symbol) -> Symbol { return Symbol.members })
+          case .EOF, ._17, ._20, ._13:
+            when PARCELR_DEBUG { fmt.println("reduce object -> { } .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [2]Symbol) -> Symbol { return Symbol.object })
             continue
-          case ._15:
-            shift(&stack, &shifted, &state, 22)
-            continue
-          case:
-            symbols :: [?]Symbol{ ._12, ._15 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 18:
         #partial switch symbol {
-          case ._16:
-            shift(&stack, &shifted, &state, 23)
+          case ._13:
+            shift(&stack, &shifted, &state, 28, &errors)
             continue
-          case:
-            symbols :: [?]Symbol{ ._16 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 19:
         #partial switch symbol {
-          case .EOF, ._15, ._18, ._12:
-            when PARCELR_DEBUG { fmt.println("reduce array -> [ values ] .") }
-            reduce(&stack, &shifted, &state,
-              proc (symbols: [3]Symbol) -> Symbol { return Symbol.array })
+          case .ERR:
+            shift(&stack, &shifted, &state, 29, &errors)
             continue
-          case:
-            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
+          case .member:
+            shift(&stack, &shifted, &state, 30, &errors)
+            continue
+          case .string:
+            shift(&stack, &shifted, &state, 22, &errors)
+            continue
         }
       case 20:
         #partial switch symbol {
-          case .values:
-            shift(&stack, &shifted, &state, 24)
-            continue
-          case .value:
-            shift(&stack, &shifted, &state, 14)
-            continue
-          case .object:
-            shift(&stack, &shifted, &state, 3)
-            continue
-          case .array:
-            shift(&stack, &shifted, &state, 4)
-            continue
-          case .string:
-            shift(&stack, &shifted, &state, 5)
-            continue
-          case .number:
-            shift(&stack, &shifted, &state, 6)
-            continue
-          case ._8:
-            shift(&stack, &shifted, &state, 7)
-            continue
-          case ._9:
-            shift(&stack, &shifted, &state, 8)
-            continue
-          case ._10:
-            shift(&stack, &shifted, &state, 9)
+          case ._13:
+            when PARCELR_DEBUG { fmt.println("reduce members -> member .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [1]Symbol) -> Symbol { return Symbol.members })
             continue
           case ._17:
-            shift(&stack, &shifted, &state, 10)
+            shift(&stack, &shifted, &state, 31, &errors)
             continue
-          case ._11:
-            shift(&stack, &shifted, &state, 11)
-            continue
-          case:
-            symbols :: [?]Symbol{ .values, .value, .object, .array, .string, .number, ._8, ._9, ._10, ._17, ._11 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 21:
         #partial switch symbol {
-          case .EOF, ._15, ._18, ._12:
-            when PARCELR_DEBUG { fmt.println("reduce object -> { members } .") }
-            reduce(&stack, &shifted, &state,
-              proc (symbols: [3]Symbol) -> Symbol { return Symbol.object })
+          case ._17:
+            shift(&stack, &shifted, &state, 32, &errors)
             continue
-          case:
-            symbols :: [?]Symbol{ .EOF, ._15, ._18, ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
+          case ._18:
+            shift(&stack, &shifted, &state, 33, &errors)
+            continue
         }
       case 22:
         #partial switch symbol {
-          case .members:
-            shift(&stack, &shifted, &state, 25)
+          case ._18:
+            shift(&stack, &shifted, &state, 34, &errors)
             continue
-          case .member:
-            shift(&stack, &shifted, &state, 17)
-            continue
-          case .string:
-            shift(&stack, &shifted, &state, 18)
-            continue
-          case:
-            symbols :: [?]Symbol{ .members, .member, .string }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 23:
         #partial switch symbol {
-          case .value:
-            shift(&stack, &shifted, &state, 26)
+          case .EOF, ._17, ._20, ._13:
+            when PARCELR_DEBUG { fmt.println("reduce array -> [ values ] .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [3]Symbol) -> Symbol { return Symbol.array })
             continue
-          case .object:
-            shift(&stack, &shifted, &state, 3)
-            continue
-          case .array:
-            shift(&stack, &shifted, &state, 4)
-            continue
-          case .string:
-            shift(&stack, &shifted, &state, 5)
-            continue
-          case .number:
-            shift(&stack, &shifted, &state, 6)
-            continue
-          case ._8:
-            shift(&stack, &shifted, &state, 7)
-            continue
-          case ._9:
-            shift(&stack, &shifted, &state, 8)
-            continue
-          case ._10:
-            shift(&stack, &shifted, &state, 9)
-            continue
-          case ._17:
-            shift(&stack, &shifted, &state, 10)
-            continue
-          case ._11:
-            shift(&stack, &shifted, &state, 11)
-            continue
-          case:
-            symbols :: [?]Symbol{ .value, .object, .array, .string, .number, ._8, ._9, ._10, ._17, ._11 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
       case 24:
         #partial switch symbol {
-          case ._18:
-            when PARCELR_DEBUG { fmt.println("reduce values -> value , values .") }
-            reduce(&stack, &shifted, &state,
-              proc (symbols: [3]Symbol) -> Symbol { return Symbol.values })
+          case ._20:
+            shift(&stack, &shifted, &state, 35, &errors)
             continue
-          case:
-            symbols :: [?]Symbol{ ._18 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
+          case ._17:
+            shift(&stack, &shifted, &state, 36, &errors)
+            continue
         }
       case 25:
         #partial switch symbol {
-          case ._12:
-            when PARCELR_DEBUG { fmt.println("reduce members -> member , members .") }
-            reduce(&stack, &shifted, &state,
-              proc (symbols: [3]Symbol) -> Symbol { return Symbol.members })
+          case ._20:
+            when PARCELR_DEBUG { fmt.println("reduce values -> prevalues value .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [2]Symbol) -> Symbol { return Symbol.values })
             continue
-          case:
-            symbols :: [?]Symbol{ ._12 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
+          case ._17:
+            shift(&stack, &shifted, &state, 37, &errors)
+            continue
         }
       case 26:
         #partial switch symbol {
-          case ._12, ._15:
-            when PARCELR_DEBUG { fmt.println("reduce member -> string : value .") }
-            reduce(&stack, &shifted, &state,
+          case .ERR, .string, .number, ._9, ._10, ._11, ._12, ._19:
+            when PARCELR_DEBUG { fmt.println("reduce prevalues -> value , .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [2]Symbol) -> Symbol { return Symbol.prevalues })
+            continue
+        }
+      case 27:
+        #partial switch symbol {
+          case .ERR, .string, .number, ._9, ._10, ._11, ._12, ._19:
+            when PARCELR_DEBUG { fmt.println("reduce prevalues -> error , .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [2]Symbol) -> Symbol { return Symbol.prevalues })
+            continue
+        }
+      case 28:
+        #partial switch symbol {
+          case .EOF, ._17, ._20, ._13:
+            when PARCELR_DEBUG { fmt.println("reduce object -> { members } .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [3]Symbol) -> Symbol { return Symbol.object })
+            continue
+        }
+      case 29:
+        #partial switch symbol {
+          case ._13:
+            shift(&stack, &shifted, &state, 38, &errors)
+            continue
+          case ._17:
+            shift(&stack, &shifted, &state, 39, &errors)
+            continue
+          case ._18:
+            shift(&stack, &shifted, &state, 33, &errors)
+            continue
+        }
+      case 30:
+        #partial switch symbol {
+          case ._13:
+            when PARCELR_DEBUG { fmt.println("reduce members -> premembers member .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [2]Symbol) -> Symbol { return Symbol.members })
+            continue
+          case ._17:
+            shift(&stack, &shifted, &state, 40, &errors)
+            continue
+        }
+      case 31:
+        #partial switch symbol {
+          case .ERR, .string:
+            when PARCELR_DEBUG { fmt.println("reduce premembers -> member , .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [2]Symbol) -> Symbol { return Symbol.premembers })
+            continue
+        }
+      case 32:
+        #partial switch symbol {
+          case .ERR, .string:
+            when PARCELR_DEBUG { fmt.println("reduce premembers -> error , .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [2]Symbol) -> Symbol { return Symbol.premembers })
+            continue
+        }
+      case 33:
+        #partial switch symbol {
+          case .value:
+            shift(&stack, &shifted, &state, 41, &errors)
+            continue
+          case .object:
+            shift(&stack, &shifted, &state, 3, &errors)
+            continue
+          case .array:
+            shift(&stack, &shifted, &state, 4, &errors)
+            continue
+          case .string:
+            shift(&stack, &shifted, &state, 5, &errors)
+            continue
+          case .number:
+            shift(&stack, &shifted, &state, 6, &errors)
+            continue
+          case ._9:
+            shift(&stack, &shifted, &state, 7, &errors)
+            continue
+          case ._10:
+            shift(&stack, &shifted, &state, 8, &errors)
+            continue
+          case ._11:
+            shift(&stack, &shifted, &state, 9, &errors)
+            continue
+          case ._19:
+            shift(&stack, &shifted, &state, 10, &errors)
+            continue
+          case ._12:
+            shift(&stack, &shifted, &state, 11, &errors)
+            continue
+        }
+      case 34:
+        #partial switch symbol {
+          case .value:
+            shift(&stack, &shifted, &state, 42, &errors)
+            continue
+          case .object:
+            shift(&stack, &shifted, &state, 3, &errors)
+            continue
+          case .array:
+            shift(&stack, &shifted, &state, 4, &errors)
+            continue
+          case .string:
+            shift(&stack, &shifted, &state, 5, &errors)
+            continue
+          case .number:
+            shift(&stack, &shifted, &state, 6, &errors)
+            continue
+          case ._9:
+            shift(&stack, &shifted, &state, 7, &errors)
+            continue
+          case ._10:
+            shift(&stack, &shifted, &state, 8, &errors)
+            continue
+          case ._11:
+            shift(&stack, &shifted, &state, 9, &errors)
+            continue
+          case ._19:
+            shift(&stack, &shifted, &state, 10, &errors)
+            continue
+          case ._12:
+            shift(&stack, &shifted, &state, 11, &errors)
+            continue
+        }
+      case 35:
+        #partial switch symbol {
+          case .EOF, ._17, ._20, ._13:
+            when PARCELR_DEBUG { fmt.println("reduce array -> [ prevalues error ] .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [4]Symbol) -> Symbol { return Symbol.array })
+            continue
+        }
+      case 36:
+        #partial switch symbol {
+          case .ERR, .string, .number, ._9, ._10, ._11, ._12, ._19:
+            when PARCELR_DEBUG { fmt.println("reduce prevalues -> prevalues error , .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [3]Symbol) -> Symbol { return Symbol.prevalues })
+            continue
+        }
+      case 37:
+        #partial switch symbol {
+          case .ERR, .string, .number, ._9, ._10, ._11, ._12, ._19:
+            when PARCELR_DEBUG { fmt.println("reduce prevalues -> prevalues value , .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [3]Symbol) -> Symbol { return Symbol.prevalues })
+            continue
+        }
+      case 38:
+        #partial switch symbol {
+          case .EOF, ._17, ._20, ._13:
+            when PARCELR_DEBUG { fmt.println("reduce object -> { premembers error } .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [4]Symbol) -> Symbol { return Symbol.object })
+            continue
+        }
+      case 39:
+        #partial switch symbol {
+          case .ERR, .string:
+            when PARCELR_DEBUG { fmt.println("reduce premembers -> premembers error , .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [3]Symbol) -> Symbol { return Symbol.premembers })
+            continue
+        }
+      case 40:
+        #partial switch symbol {
+          case .ERR, .string:
+            when PARCELR_DEBUG { fmt.println("reduce premembers -> premembers member , .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [3]Symbol) -> Symbol { return Symbol.premembers })
+            continue
+        }
+      case 41:
+        #partial switch symbol {
+          case ._13, ._17:
+            when PARCELR_DEBUG { fmt.println("reduce member -> error : value .") }
+            reduce(&stack, &shifted, &state, &errors,
               proc (symbols: [3]Symbol) -> Symbol { return Symbol.member })
             continue
-          case:
-            symbols :: [?]Symbol{ ._12, ._15 }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
+        }
+      case 42:
+        #partial switch symbol {
+          case ._13, ._17:
+            when PARCELR_DEBUG { fmt.println("reduce member -> string : value .") }
+            reduce(&stack, &shifted, &state, &errors,
+              proc (symbols: [3]Symbol) -> Symbol { return Symbol.member })
+            continue
         }
     }
+
+    if errors > 0 {
+      if symbol != .ERR && state in HANDLES_ERRORS {
+        append(&stack, Symbol.ERR)
+        continue
+      }
+      
+      if len(stack) == 0 do return .ERR
+      pop(&stack)
+      continue
+    }
+    
+    if symbol != .ERR {
+      append(&stack, Symbol.ERR)
+      continue
+    }
+    
+    if len(shifted) == 0 do return .ERR
+    popped_state := pop(&shifted)
+    state = popped_state.state
+    continue
   }
 }

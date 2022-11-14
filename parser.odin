@@ -23,6 +23,7 @@ Grammar :: struct {
 
 ROOT :: Symbol(0)
 EOF  :: Lexeme(0)
+ERR  :: Lexeme(1)
 
 void :: struct{}
 
@@ -33,15 +34,17 @@ parse :: proc(d: []u8) -> (Grammar, bool) {
   nonlexemes := make(map[Symbol]void)
   defer delete(nonlexemes)
 
-  // append ROOT and EOF symbols
-  // the first symbol mentioned in the grammar file will be symbol 2
+  // append ROOT, EOF, and ERR symbols
+  // the first symbol mentioned in the grammar file will be symbol 3
   rhs := make([]Symbol, 1)
-  rhs[0] = Symbol(2)
+  rhs[0] = Symbol(3)
   append(&rules, RuleDefinition { ROOT, rhs })
-  append(&names, "ROOT")
-  append(&names, "EOF")
+  append(&names, "ROOT") // won't show up in templates but it's nice for debug information
+  append(&names, "$")
+  append(&names, "error")
   append(&enum_names, "")
   append(&enum_names, "EOF")
+  append(&enum_names, "ERR")
 
   nonlexemes[ROOT] = {}
 

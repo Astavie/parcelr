@@ -1,9 +1,9 @@
 package main
 
+import "core:strconv"
+import "core:slice"
 import "core:strings"
 import "core:fmt"
-import "core:runtime"
-import "core:intrinsics"
 
 Var :: []string
 
@@ -51,50 +51,12 @@ StateVal :: struct {
   lookahead: []LookaheadVal,
 }
 
-Value      :: union #no_nil { void, int, string, LookaheadVal, ReduceVal, StateVal, Token, ValueSlice }
-ValueSlice :: struct { type: u8, slice: []void }
-
-ValueIterator :: struct {
-  index: int,
-  data: ValueSlice,
-}
-
-VALUE_INFO := runtime.type_info_base(type_info_of(typeid_of(Value))).variant.(runtime.Type_Info_Union)
-
-iterate_values :: proc(it: ^ValueIterator) -> (val: Value, idx: int, cond: bool) {
-  if cond = it.index < len(it.data.slice); cond {
-    val = ---
-    
-    // set value
-    type    := VALUE_INFO.variants[it.data.type]
-    val_ptr := rawptr(uintptr(&it.data.slice[0]) + uintptr(type.size * it.index))
-    intrinsics.mem_copy(&val, val_ptr, type.size)
-    
-    // set union tag
-    tag_ptr := transmute(^u8)(uintptr(&val) + VALUE_INFO.tag_offset)
-    tag_ptr^ = it.data.type
-    
-    // continue
-    idx = it.index
-    it.index += 1
-  }
-  return
-}
+Value :: union #no_nil { void, int, string, LookaheadVal, ReduceVal, StateVal, Token, []void, []int, []string, []LookaheadVal, []ReduceVal, []StateVal, []Token }
 
 Globals :: struct {
   state:  []StateVal,
   symbol: []Token,
   lexeme: []Token,
-}
-
-slice_to_val :: proc(s: $T/[]$E) -> Value {
-  id := typeid_of(E)
-  for variant, i in VALUE_INFO.variants {
-    if variant.id == id {
-      return ValueSlice{ u8(i), transmute([]void)s }
-    }
-  }
-  return ---
 }
 
 make_single :: proc(e: $E) -> []E {
@@ -144,7 +106,7 @@ make_globals :: proc(g: Grammar, table: Table) -> Globals {
       switch v in decision {
         case Reduce:
           if v == Reduce(START) {
-            lah[j].accept = make_single(void{})
+            lah[j].accept = {{}}
           } else {
             rule := g.rules[v]
             lhs := Token{ g.symbols[rule.lhs], g.enum_names[rule.lhs] }
@@ -164,32 +126,32 @@ make_globals :: proc(g: Grammar, table: Table) -> Globals {
   return globals
 }
 
-get_child :: proc(val: Value, s: string) -> (Value, bool) {
+get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
   #partial switch v in val {
     case LookaheadVal:
       switch s {
         case "symbol":
-          return slice_to_val(v.symbol), true
+          return v.symbol, true
         case "accept":
-          return slice_to_val(v.accept), true
+          return v.accept, true
         case "shift":
-          return slice_to_val(v.shift), true
+          return v.shift, true
         case "reduce":
-          return slice_to_val(v.reduce), true
+          return v.reduce, true
       }
     case ReduceVal:
       switch s {
         case "lhs":
           return v.lhs, true
         case "rhs":
-          return slice_to_val(v.rhs), true
+          return v.rhs, true
       }
     case StateVal:
       switch s {
         case "index":
           return v.index, true
         case "lookahead":
-          return slice_to_val(v.lookahead), true
+          return v.lookahead, true
       }
     case Token:
       switch s {
@@ -198,11 +160,120 @@ get_child :: proc(val: Value, s: string) -> (Value, bool) {
         case "enum":
           return v.enum_value, true
       }
-    case ValueSlice:
+    case []void:
       switch s {
         case "length":
-          return len(v.slice), true
+          return len(v), true
       }
+    case []int:
+      switch s {
+        case "length":
+          return len(v), true
+        case:
+          i := strconv.parse_int(s, 10) or_return
+          return []void{{}} if slice.contains(v, i) else []void{}, true
+      }
+    case []string:
+      switch s {
+        case "length":
+          return len(v), true
+        case:
+          return []void{{}} if slice.contains(v, s) else []void{}, true
+      }
+    case []LookaheadVal, []ReduceVal, []StateVal, []Token:
+      it, _ := as_slice(val)
+      switch s {
+        case "length":
+          return it.len, true
+        case:
+          children := make([dynamic]Value)
+          defer delete(children)
+          for elem in iterate_values(&it) {
+            child := get_child(elem, s) or_return
+            if it2, ok := as_slice(child); ok {
+              for elem2 in iterate_values(&it2) {
+                append(&children, elem2)
+              }
+            } else {
+              append(&children, child)
+            }
+          }
+          return slice_to_value(children[:]), true
+      }
+  }
+  return ---, false
+}
+
+cast_slice :: proc(s: $T/[]$E, $A: typeid) -> []A {
+  slice := make([]A, len(s))
+  for e, i in s {
+    slice[i] = e.(A)
+  }
+  return slice
+}
+
+slice_to_value :: proc(s: []Value) -> Value {
+  if len(s) == 0 do return []void{}
+
+  #partial switch v in s[0] {
+    case void:
+      return cast_slice(s, void)
+    case int:
+      return cast_slice(s, int)
+    case string:
+      return cast_slice(s, string)
+    case LookaheadVal:
+      return cast_slice(s, LookaheadVal)
+    case ReduceVal:
+      return cast_slice(s, ReduceVal)
+    case StateVal:
+      return cast_slice(s, StateVal)
+    case Token:
+      return cast_slice(s, Token)
+  }
+
+  return ---
+}
+
+ValueIterator :: struct {
+  len: int,
+  indx: int,
+  data: Value,
+}
+
+iterate_values :: proc(val: ^ValueIterator) -> (Value, int, bool) {
+  
+  iterate :: proc(s: $T/[]$E, indx: ^int) -> (E, int, bool) {
+    if indx^ >= len(s) do return ---, ---, false
+    e := s[indx^]
+    indx^ += 1
+    return e, indx^ - 1, true
+  }
+
+  #partial switch v in val.data {
+    case []void:
+      return iterate(v, &val.indx)
+    case []int:
+      return iterate(v, &val.indx)
+    case []string:
+      return iterate(v, &val.indx)
+    case []LookaheadVal:
+      return iterate(v, &val.indx)
+    case []ReduceVal:
+      return iterate(v, &val.indx)
+    case []StateVal:
+      return iterate(v, &val.indx)
+    case []Token:
+      return iterate(v, &val.indx)
+  }
+  return ---, ---, false
+}
+
+as_slice :: proc(val: Value) -> (ValueIterator, bool) {
+  #partial switch v in val {
+    case []void, []int, []string, []LookaheadVal, []ReduceVal, []StateVal, []Token:
+      p := val
+      return { len((^[]void)(&p)^), 0, v }, true
   }
   return ---, false
 }
@@ -245,9 +316,9 @@ eval :: proc(directives: []Directive, g: Grammar, table: Table) -> (s: string, o
   globals := make_globals(g, table)
 
   stack := make([dynamic]StackElement)
-  append(&stack, StackElement{ "state",  slice_to_val(globals.state)  })
-  append(&stack, StackElement{ "symbol", slice_to_val(globals.symbol) })
-  append(&stack, StackElement{ "lexeme", slice_to_val(globals.lexeme) })
+  append(&stack, StackElement{ "state",  globals.state  })
+  append(&stack, StackElement{ "symbol", globals.symbol })
+  append(&stack, StackElement{ "lexeme", globals.lexeme })
 
   sb := strings.builder_make_none()
 
@@ -298,12 +369,11 @@ _eval :: proc(sb: ^strings.Builder, stack: ^[dynamic]StackElement, directives: ^
           fmt.sbprint(sb, varlit.lit)
         }
       case Start:
-        slice := (get_value(v.var, stack[:]) or_return).(ValueSlice) or_return
-        it := ValueIterator{ 0, slice }
+        it := as_slice(get_value(v.var, stack[:]) or_return) or_return
         for val, idx in iterate_values(&it) {
           append(stack, StackElement{ v.name, val })
           dirs := directives^;
-          _eval(sb, stack, &dirs, idx == len(slice.slice) - 1) or_return
+          _eval(sb, stack, &dirs, idx == it.len - 1) or_return
           pop(stack)
         }
         _skip(directives) or_return

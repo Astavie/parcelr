@@ -5,17 +5,26 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-Symbol :: enum { EOF } //d
+Symbol :: enum { EOF, ERR } //d
 //l Symbol :: enum {
 //symbol
-  //w  ${symbol.enum}
-  //s ,
+  //w  ${symbol.enum},
+//e
+//w  }
+
+HANDLES_ERRORS := map[int]struct{}{} //d
+//l HANDLES_ERRORS := map[int]struct{}{
+//state
+  //state.lookahead.symbol.enum.ERR
+    //w  ${state.index} = {},
+  //e
 //e
 //w  }
 
 symbol_name :: proc(symbol: Symbol) -> string {
   switch symbol {
     case .EOF: return "EOF" //d
+    case .ERR: return "ERR" //d
   //symbol
     //l case .${symbol.enum}: return "${symbol.name}"
   //e
@@ -35,9 +44,7 @@ when PARCELR_DEBUG {
           //lexeme
             //l case "${lexeme.name}": append(&symbols, Symbol.${lexeme.enum})
           //e
-            case:
-              fmt.printf("Unknown token '%s'\n", w)
-              return
+            case: append(&symbols, Symbol.ERR)
           }
         }
       }
@@ -54,6 +61,7 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
 
   shifted := make([dynamic]State)
   state := 0
+  errors := 0
 
   defer delete(stack)
   defer delete(shifted)
@@ -64,18 +72,21 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
     return Symbol.EOF
   }
 
-  shift :: proc(stack: ^[dynamic]Symbol, shifted: ^[dynamic]State, state: ^int, new_state: int) {
-    append(shifted, State { pop_safe(stack) or_else Symbol.EOF, state^ })
+  shift :: proc(stack: ^[dynamic]Symbol, shifted: ^[dynamic]State, state: ^int, new_state: int, errors: ^int) {
+    symbol := pop_safe(stack) or_else Symbol.EOF
+    if symbol == .ERR do errors^ += 1
+    append(shifted, State { symbol, state^ })
     state^ = new_state
   }
 
-  reduce :: proc(stack: ^[dynamic]Symbol, shifted: ^[dynamic]State, state: ^int, f: $T/proc(symbols: [$N]Symbol) -> Symbol) {
+  reduce :: proc(stack: ^[dynamic]Symbol, shifted: ^[dynamic]State, state: ^int, errors: ^int, f: $T/proc(symbols: [$N]Symbol) -> Symbol) {
     symbols : [N]Symbol = ---
     when N > 0 {
       state^ = shifted[len(shifted) - N].state
     }
     for i := N - 1; i >= 0; i -= 1 {
       symbols[i] = pop(shifted).symbol
+      if symbols[i] == .ERR do errors^ -= 1
     }
     append(stack, f(symbols))
   }
@@ -89,7 +100,8 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
       for i := len(stack) - 1; i >= 0; i -= 1 {
         fmt.printf(" %s\u001b[0m", symbol_name(stack[i]))
       }
-      fmt.println(" $\u001b[0m")
+      fmt.printf(" %s\u001b[0m", symbol_name(.EOF))
+      fmt.println()
     }
     symbol := peek(stack[:])
     switch state {
@@ -108,31 +120,39 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
             //l return shifted[0].symbol
           //e
           //lah.shift
-            //l shift(&stack, &shifted, &state, ${shift})
+            //l shift(&stack, &shifted, &state, ${shift}, &errors)
             //l continue
           //e
           //lah.reduce
             //l when PARCELR_DEBUG { fmt.println("reduce ${reduce}") }
-            //l reduce(&stack, &shifted, &state,
+            //l reduce(&stack, &shifted, &state, &errors,
             //l   proc (symbols: [${reduce.rhs.length}]Symbol) -> Symbol { return Symbol.${reduce.lhs.enum} })
             //l continue
           //e
         //e
-          case:
-            symbols :: [?]Symbol{ .EOF } //d
-            //l symbols :: [?]Symbol{
-            //state.lookahead lah
-            //lah.symbol
-              //w  .${symbol.enum}
-              //s ,
-            //e
-              //s ,
-            //e
-            //w  }
-            fmt.printf("Unexpected %v, expected %v\n", symbol, symbols)
-            return nil
         }
     //e
     }
+
+    if errors > 0 {
+      if symbol != .ERR && state in HANDLES_ERRORS {
+        append(&stack, Symbol.ERR)
+        continue
+      }
+      
+      if len(stack) == 0 do return .ERR
+      pop(&stack)
+      continue
+    }
+    
+    if symbol != .ERR {
+      append(&stack, Symbol.ERR)
+      continue
+    }
+    
+    if len(shifted) == 0 do return .ERR
+    popped_state := pop(&shifted)
+    state = popped_state.state
+    continue
   }
 }

@@ -10,14 +10,25 @@ value -> "null" .
 
 object -> "{" "}" .
 object -> "{" members "}" .
+object -> "{" premembers error "}" .
 
 members -> member .
-members -> member "," members .
+members -> premembers member .
+premembers -> member "," .
+premembers -> premembers member "," .
+premembers -> error "," .
+premembers -> premembers error "," .
 
 member -> string ":" value .
+member -> error ":" value .
 
 array -> "[" "]" .
 array -> "[" values "]" .
+array -> "[" prevalues error "]" .
 
 values -> value .
-values -> value "," values .
+values -> prevalues value .
+prevalues -> value "," .
+prevalues -> prevalues value "," .
+prevalues -> error "," .
+prevalues -> prevalues error "," .

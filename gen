@@ -1,0 +1,6 @@
+#!/bin/sh
+
+rm templates/examples/*.odin
+odin run . -- LALR1 templates/examples/$1.txt
+mv out templates/examples/$1.odin
+
