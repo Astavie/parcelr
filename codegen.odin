@@ -44,6 +44,7 @@ LookaheadVal :: struct {
 ReduceVal :: struct {
   lhs: Token,
   rhs: []Token,
+  code: string,
 }
 
 StateVal :: struct {
@@ -116,7 +117,7 @@ make_globals :: proc(g: Grammar, table: Table) -> Globals {
             for k in 0..<len(rhs) {
               rhs[k] = { g.symbols[rule.rhs[k]], g.enum_names[rule.rhs[k]] }
             }
-            lah[j].reduce = make_single(ReduceVal{ lhs, rhs })
+            lah[j].reduce = make_single(ReduceVal{ lhs, rhs, rule.code })
           }
         case Shift:
           lah[j].shift = make_single(int(v))
@@ -147,6 +148,8 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
           return v.lhs, true
         case "rhs":
           return slice.clone(v.rhs), true
+        case "code":
+          return v.code, true
       }
     case StateVal:
       switch s {
@@ -315,6 +318,15 @@ as_slice :: proc(val: Value, ints: bool) -> (ValueIterator, bool) {
       if ints {
         // return a slice of N voids
         return { v, 0, slice.from_ptr((^void)(nil), v) }, true
+      }
+    case string:
+      if ints {
+        // return if it is nonempty
+        if len(v) > 0 {
+          return { 1, 0, slice.from_ptr((^void)(nil), 1) }, true
+        } else {
+          return { 0, 0, []void{} }, true
+        }
       }
     case []void, []int, []string, []LookaheadVal, []ReduceVal, []StateVal, []Token:
       p := val

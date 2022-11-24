@@ -10,8 +10,9 @@ Rule  :: distinct int
 START :: Rule(0)
 
 RuleDefinition :: struct {
-  lhs : Symbol,
-  rhs : []Symbol,
+  lhs: Symbol,
+  rhs: []Symbol,
+  code: string,
 }
 
 Grammar :: struct {
@@ -56,7 +57,7 @@ parse :: proc(d: []u8) -> (Grammar, Error) {
   // the first symbol mentioned in the grammar file will be symbol 3
   rhs := make([]Symbol, 1)
   rhs[0] = Symbol(3)
-  append(&rules, RuleDefinition { ROOT, rhs })
+  append(&rules, RuleDefinition { ROOT, rhs, {} })
   append(&names, "ROOT") // won't show up in templates but it's nice for debug information
   append(&names, "$")
   append(&names, "error")
@@ -94,6 +95,10 @@ parse :: proc(d: []u8) -> (Grammar, Error) {
     a: for len(data) > start {
       switch data[start] {
         case '#':
+          // code token
+          if len(data) > start + 1 && data[start + 1] == '#' {
+            return "##", data[start + 2:]
+          }
           // skip line
           for len(data) > start && data[start] != '\n' {
             start += 1
@@ -157,7 +162,26 @@ parse :: proc(d: []u8) -> (Grammar, Error) {
       append(&rhs, get_symbol(&names, &enum_names, token))
     }
 
-    append(&rules, RuleDefinition { lhs, rhs[:] })
+    code := ""
+    {
+      token, rest := parse_token(data)
+      if token == "##" {
+        data = rest
+        
+        start := 0
+        for len(data) > start + 1 && !(data[start] == '#' && data[start + 1] == '#') {
+          start += 1
+        }
+        if len(data) > start + 1 && data[start] == '#' && data[start + 1] == '#' {
+          code = strings.trim_space(transmute(string)data[:start])
+          data = data[start + 2:]
+        } else {
+          return ---, "## expected"
+        }
+      }
+    }
+
+    append(&rules, RuleDefinition { lhs, rhs[:], code })
   }
 
   lexemes := make([]Symbol, len(names) - len(nonlexemes))

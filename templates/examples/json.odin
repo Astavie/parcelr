@@ -7,6 +7,8 @@ import "core:strings"
 
 Symbol :: enum { EOF, ERR, json, value, object, array, string, number, _9, _10, _11, _12, _13, members, premembers, member, _17, _18, _19, _20, values, prevalues, }
 
+Value :: struct { symbol: Symbol, value: any }
+
 HANDLES_ERRORS := map[int]struct{}{ 10 = {}, 11 = {}, 14 = {}, 19 = {}, 26 = {}, 27 = {}, 31 = {}, 32 = {}, 36 = {}, 37 = {}, 39 = {}, 40 = {}, }
 
 symbol_name :: proc(symbol: Symbol) -> string {
@@ -41,68 +43,89 @@ PARCELR_DEBUG :: true
 
 when PARCELR_DEBUG {
   main :: proc() {
-    symbols := make([dynamic]Symbol)
+    symbols := make([dynamic]Value)
+    defer delete(symbols)
+
     if len(os.args) >= 2 {
       for s in os.args[1:] {
-        for w in strings.split(s, " ") {
+        strs := strings.split(s, " ")
+        defer delete(strs)
+
+        for w in strs {
           switch w {
-            case "error": append(&symbols, Symbol.ERR)
-            case "string": append(&symbols, Symbol.string)
-            case "number": append(&symbols, Symbol.number)
-            case "true": append(&symbols, Symbol._9)
-            case "false": append(&symbols, Symbol._10)
-            case "null": append(&symbols, Symbol._11)
-            case "{": append(&symbols, Symbol._12)
-            case "}": append(&symbols, Symbol._13)
-            case ",": append(&symbols, Symbol._17)
-            case ":": append(&symbols, Symbol._18)
-            case "[": append(&symbols, Symbol._19)
-            case "]": append(&symbols, Symbol._20)
-            case: append(&symbols, Symbol.ERR)
+            case "error": append(&symbols, Value{ .ERR, new_any(w) })
+            case "string": append(&symbols, Value{ .string, new_any(w) })
+            case "number": append(&symbols, Value{ .number, new_any(w) })
+            case "true": append(&symbols, Value{ ._9, new_any(w) })
+            case "false": append(&symbols, Value{ ._10, new_any(w) })
+            case "null": append(&symbols, Value{ ._11, new_any(w) })
+            case "{": append(&symbols, Value{ ._12, new_any(w) })
+            case "}": append(&symbols, Value{ ._13, new_any(w) })
+            case ",": append(&symbols, Value{ ._17, new_any(w) })
+            case ":": append(&symbols, Value{ ._18, new_any(w) })
+            case "[": append(&symbols, Value{ ._19, new_any(w) })
+            case "]": append(&symbols, Value{ ._20, new_any(w) })
+            case: append(&symbols, Value{ .ERR, nil })
           }
         }
       }
     }
-    fmt.println(symbol_name(parse(symbols[:])))
+
+    parsed := parse(symbols[:])
+    fmt.println(symbol_name(parsed.symbol), parsed.value)
   }
 }
 
-parse :: proc(lexemes: []Symbol) -> Symbol {
+Pair :: struct($Key, $Value: typeid) {
+  key: Key,
+  value: Value,
+}
+as :: proc(ptr: any, $T: typeid) -> ^T {
+  return (^T)(ptr.data)
+}
+deref :: proc(ptr: any, $T: typeid) -> T {
+  defer free(ptr.data)
+  return as(ptr, T)^
+}
+new_any :: proc(data: $T) -> any {
+  return any{new_clone(data), typeid_of(T)}
+}
+
+parse :: proc(lexemes: []Value) -> Value {
   stack := slice.clone_to_dynamic(lexemes)
   slice.reverse(stack[:])
 
-  State :: struct { symbol: Symbol, state: int }
+  State :: struct { symbol: Symbol, value: any, state: int }
 
-  shifted := make([dynamic]State)
+  shifted: #soa[dynamic]State
   state := 0
   errors := 0
 
   defer delete(stack)
-  defer delete(shifted)
+  defer delete_soa(shifted)
 
-  peek :: proc(a: []Symbol) -> Symbol {
+  peek :: proc(a: []Value) -> Symbol {
     i := len(a) - 1
-    if i >= 0 do return a[i]
-    return Symbol.EOF
+    if i >= 0 do return a[i].symbol
+    return .EOF
   }
 
-  shift :: proc(stack: ^[dynamic]Symbol, shifted: ^[dynamic]State, state: ^int, new_state: int, errors: ^int) {
-    symbol := pop_safe(stack) or_else Symbol.EOF
-    if symbol == .ERR do errors^ += 1
-    append(shifted, State { symbol, state^ })
+  shift :: proc(stack: ^[dynamic]Value, shifted: ^#soa[dynamic]State, state: ^int, new_state: int, errors: ^int) {
+    val := pop_safe(stack) or_else Value{ .EOF, nil }
+    if val.symbol == .ERR do errors^ += 1
+    append_soa(shifted, State { val.symbol, val.value, state^ })
     state^ = new_state
   }
 
-  reduce :: proc(stack: ^[dynamic]Symbol, shifted: ^[dynamic]State, state: ^int, errors: ^int, f: $T/proc(symbols: [$N]Symbol) -> Symbol) {
-    symbols : [N]Symbol = ---
+  reduce :: proc(stack: ^[dynamic]Value, shifted: ^#soa[dynamic]State, state: ^int, errors: ^int, f: $T/proc(children: [$N]any) -> Value) {
+    vals: [N]any = ---
     when N > 0 {
+      _, values, _ := soa_unzip(shifted^[:])
+      copy_slice(vals[:], values[len(values) - N:])
       state^ = shifted[len(shifted) - N].state
+      resize_soa(shifted, len(shifted) - N)
     }
-    for i := N - 1; i >= 0; i -= 1 {
-      symbols[i] = pop(shifted).symbol
-      if symbols[i] == .ERR do errors^ -= 1
-    }
-    append(stack, f(symbols))
+    append(stack, f(vals))
   }
 
   for {
@@ -112,7 +135,7 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
       }
       fmt.printf("\u001b[100m%i", state)
       for i := len(stack) - 1; i >= 0; i -= 1 {
-        fmt.printf(" %s\u001b[0m", symbol_name(stack[i]))
+        fmt.printf(" %s\u001b[0m", symbol_name(stack[i].symbol))
       }
       fmt.printf(" %s\u001b[0m", symbol_name(.EOF))
       fmt.println()
@@ -158,14 +181,18 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
       case 1:
         #partial switch symbol {
           case .EOF:
-            return shifted[0].symbol
+            return Value{ shifted[0].symbol, shifted[0].value }
         }
       case 2:
         #partial switch symbol {
           case .EOF:
             when PARCELR_DEBUG { fmt.println("reduce json -> value .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [1]Symbol) -> Symbol { return Symbol.json })
+              proc (children: [1]any) -> Value {
+                this: any
+                this = children[0]
+                return { .json, this }
+              })
             continue
         }
       case 3:
@@ -173,7 +200,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> object .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
+              proc (children: [1]any) -> Value {
+                this: any
+                this = children[0]
+                return { .value, this }
+              })
             continue
         }
       case 4:
@@ -181,7 +212,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> array .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
+              proc (children: [1]any) -> Value {
+                this: any
+                this = children[0]
+                return { .value, this }
+              })
             continue
         }
       case 5:
@@ -189,7 +224,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> string .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
+              proc (children: [1]any) -> Value {
+                this: any
+                this = new_any("string")
+                return { .value, this }
+              })
             continue
         }
       case 6:
@@ -197,7 +236,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> number .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
+              proc (children: [1]any) -> Value {
+                this: any
+                this = new_any(69)
+                return { .value, this }
+              })
             continue
         }
       case 7:
@@ -205,7 +248,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> true .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
+              proc (children: [1]any) -> Value {
+                this: any
+                this = new_any(true)
+                return { .value, this }
+              })
             continue
         }
       case 8:
@@ -213,7 +260,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> false .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
+              proc (children: [1]any) -> Value {
+                this: any
+                this = new_any(false)
+                return { .value, this }
+              })
             continue
         }
       case 9:
@@ -221,7 +272,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce value -> null .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [1]Symbol) -> Symbol { return Symbol.value })
+              proc (children: [1]any) -> Value {
+                this: any
+                this = nil
+                return { .value, this }
+              })
             continue
         }
       case 10:
@@ -295,7 +350,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce array -> [ ] .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [2]Symbol) -> Symbol { return Symbol.array })
+              proc (children: [2]any) -> Value {
+                this: any
+                this = new_any([]any{})
+                return { .array, this }
+              })
             continue
         }
       case 13:
@@ -345,7 +404,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case ._20:
             when PARCELR_DEBUG { fmt.println("reduce values -> value .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [1]Symbol) -> Symbol { return Symbol.values })
+              proc (children: [1]any) -> Value {
+                this: any
+                this = new_any(make([dynamic]any)); append(as(this, [dynamic]any), children[0])
+                return { .values, this }
+              })
             continue
           case ._17:
             shift(&stack, &shifted, &state, 26, &errors)
@@ -362,7 +425,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce object -> { } .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [2]Symbol) -> Symbol { return Symbol.object })
+              proc (children: [2]any) -> Value {
+                this: any
+                this = new_any(map[string]any{})
+                return { .object, this }
+              })
             continue
         }
       case 18:
@@ -388,7 +455,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case ._13:
             when PARCELR_DEBUG { fmt.println("reduce members -> member .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [1]Symbol) -> Symbol { return Symbol.members })
+              proc (children: [1]any) -> Value {
+                this: any
+                this = new_any(make(map[string]any)); pair := deref(children[0], Pair(string, any)); as(this, map[string]any)[pair.key] = pair.value
+                return { .members, this }
+              })
             continue
           case ._17:
             shift(&stack, &shifted, &state, 31, &errors)
@@ -414,7 +485,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce array -> [ values ] .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [3]Symbol) -> Symbol { return Symbol.array })
+              proc (children: [3]any) -> Value {
+                this: any
+                this = new_any(deref(children[1], [dynamic]any)[:])
+                return { .array, this }
+              })
             continue
         }
       case 24:
@@ -428,13 +503,17 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
         }
       case 25:
         #partial switch symbol {
+          case ._17:
+            shift(&stack, &shifted, &state, 37, &errors)
+            continue
           case ._20:
             when PARCELR_DEBUG { fmt.println("reduce values -> prevalues value .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [2]Symbol) -> Symbol { return Symbol.values })
-            continue
-          case ._17:
-            shift(&stack, &shifted, &state, 37, &errors)
+              proc (children: [2]any) -> Value {
+                this: any
+                this = children[0]; append(as(this, [dynamic]any), children[1])
+                return { .values, this }
+              })
             continue
         }
       case 26:
@@ -442,7 +521,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .ERR, .string, .number, ._9, ._10, ._11, ._12, ._19:
             when PARCELR_DEBUG { fmt.println("reduce prevalues -> value , .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [2]Symbol) -> Symbol { return Symbol.prevalues })
+              proc (children: [2]any) -> Value {
+                this: any
+                this = new_any(make([dynamic]any)); append(as(this, [dynamic]any), children[0])
+                return { .prevalues, this }
+              })
             continue
         }
       case 27:
@@ -450,7 +533,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .ERR, .string, .number, ._9, ._10, ._11, ._12, ._19:
             when PARCELR_DEBUG { fmt.println("reduce prevalues -> error , .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [2]Symbol) -> Symbol { return Symbol.prevalues })
+              proc (children: [2]any) -> Value {
+                this: any
+                this = new_any(make([dynamic]any))
+                return { .prevalues, this }
+              })
             continue
         }
       case 28:
@@ -458,7 +545,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce object -> { members } .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [3]Symbol) -> Symbol { return Symbol.object })
+              proc (children: [3]any) -> Value {
+                this: any
+                this = children[1]
+                return { .object, this }
+              })
             continue
         }
       case 29:
@@ -475,13 +566,17 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
         }
       case 30:
         #partial switch symbol {
+          case ._17:
+            shift(&stack, &shifted, &state, 40, &errors)
+            continue
           case ._13:
             when PARCELR_DEBUG { fmt.println("reduce members -> premembers member .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [2]Symbol) -> Symbol { return Symbol.members })
-            continue
-          case ._17:
-            shift(&stack, &shifted, &state, 40, &errors)
+              proc (children: [2]any) -> Value {
+                this: any
+                this = children[0]; pair := deref(children[1], Pair(string, any)); as(this, map[string]any)[pair.key] = pair.value
+                return { .members, this }
+              })
             continue
         }
       case 31:
@@ -489,7 +584,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .ERR, .string:
             when PARCELR_DEBUG { fmt.println("reduce premembers -> member , .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [2]Symbol) -> Symbol { return Symbol.premembers })
+              proc (children: [2]any) -> Value {
+                this: any
+                this = new_any(make(map[string]any)); pair := deref(children[0], Pair(string, any)); as(this, map[string]any)[pair.key] = pair.value
+                return { .premembers, this }
+              })
             continue
         }
       case 32:
@@ -497,7 +596,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .ERR, .string:
             when PARCELR_DEBUG { fmt.println("reduce premembers -> error , .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [2]Symbol) -> Symbol { return Symbol.premembers })
+              proc (children: [2]any) -> Value {
+                this: any
+                this = new_any(make(map[string]any))
+                return { .premembers, this }
+              })
             continue
         }
       case 33:
@@ -571,7 +674,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce array -> [ prevalues error ] .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [4]Symbol) -> Symbol { return Symbol.array })
+              proc (children: [4]any) -> Value {
+                this: any
+                this = new_any(deref(children[1], [dynamic]any)[:])
+                return { .array, this }
+              })
             continue
         }
       case 36:
@@ -579,7 +686,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .ERR, .string, .number, ._9, ._10, ._11, ._12, ._19:
             when PARCELR_DEBUG { fmt.println("reduce prevalues -> prevalues error , .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [3]Symbol) -> Symbol { return Symbol.prevalues })
+              proc (children: [3]any) -> Value {
+                this: any
+                this = children[0]
+                return { .prevalues, this }
+              })
             continue
         }
       case 37:
@@ -587,7 +698,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .ERR, .string, .number, ._9, ._10, ._11, ._12, ._19:
             when PARCELR_DEBUG { fmt.println("reduce prevalues -> prevalues value , .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [3]Symbol) -> Symbol { return Symbol.prevalues })
+              proc (children: [3]any) -> Value {
+                this: any
+                this = children[0]; append(as(this, [dynamic]any), children[1])
+                return { .prevalues, this }
+              })
             continue
         }
       case 38:
@@ -595,7 +710,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .EOF, ._17, ._20, ._13:
             when PARCELR_DEBUG { fmt.println("reduce object -> { premembers error } .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [4]Symbol) -> Symbol { return Symbol.object })
+              proc (children: [4]any) -> Value {
+                this: any
+                this = children[1]
+                return { .object, this }
+              })
             continue
         }
       case 39:
@@ -603,7 +722,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .ERR, .string:
             when PARCELR_DEBUG { fmt.println("reduce premembers -> premembers error , .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [3]Symbol) -> Symbol { return Symbol.premembers })
+              proc (children: [3]any) -> Value {
+                this: any
+                this = children[0]
+                return { .premembers, this }
+              })
             continue
         }
       case 40:
@@ -611,7 +734,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case .ERR, .string:
             when PARCELR_DEBUG { fmt.println("reduce premembers -> premembers member , .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [3]Symbol) -> Symbol { return Symbol.premembers })
+              proc (children: [3]any) -> Value {
+                this: any
+                this = children[0]; pair := deref(children[1], Pair(string, any)); as(this, map[string]any)[pair.key] = pair.value
+                return { .premembers, this }
+              })
             continue
         }
       case 41:
@@ -619,7 +746,11 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case ._13, ._17:
             when PARCELR_DEBUG { fmt.println("reduce member -> error : value .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [3]Symbol) -> Symbol { return Symbol.member })
+              proc (children: [3]any) -> Value {
+                this: any
+                this = new_any(Pair(string, any){ {}, children[2] })
+                return { .member, this }
+              })
             continue
         }
       case 42:
@@ -627,30 +758,34 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           case ._13, ._17:
             when PARCELR_DEBUG { fmt.println("reduce member -> string : value .") }
             reduce(&stack, &shifted, &state, &errors,
-              proc (symbols: [3]Symbol) -> Symbol { return Symbol.member })
+              proc (children: [3]any) -> Value {
+                this: any
+                this = new_any(Pair(string, any){ deref(children[0], string), children[2] })
+                return { .member, this }
+              })
             continue
         }
     }
 
     if errors > 0 {
       if state in HANDLES_ERRORS {
-        append(&stack, Symbol.ERR)
+        append(&stack, Value{ .ERR, nil })
         continue
       }
       
-      if len(stack) == 0 do return .ERR
+      if len(stack) == 0 do return Value{ .ERR, nil }
       pop(&stack)
       continue
     }
     
     if symbol != .ERR {
-      append(&stack, Symbol.ERR)
+      append(&stack, Value{ .ERR, nil })
       continue
     }
     
-    if len(shifted) == 0 do return .ERR
-    popped_state := pop(&shifted)
-    state = popped_state.state
+    if len(shifted) == 0 do return Value{ .ERR, nil }
+    state = shifted[len(shifted) - 1].state
+    resize_soa(&shifted, len(shifted) - 1)
     continue
   }
 }

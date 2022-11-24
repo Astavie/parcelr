@@ -42,7 +42,7 @@ _main :: proc() {
 
   file, ok := os.read_entire_file(os.args[2])
   if !ok {
-    fmt.println("unknown file")
+    fmt.println("could not parse grammar: unknown file")
     return
   }
   defer delete(file)
@@ -82,14 +82,14 @@ _main :: proc() {
  
   template, ok3 := os.read_entire_file("templates/template.odin")
   if !ok3 {
-    fmt.println("could not read template")
+    fmt.println("could not parse template: unknown file")
     return
   }
   defer delete(template)
 
   dirs, ok4 := parse_template(transmute(string)template, "//")
   if !ok4 {
-    fmt.println("could not parse template")
+    fmt.println("could not parse template: mismatched braces")
     return
   }
   defer delete_directives(dirs)

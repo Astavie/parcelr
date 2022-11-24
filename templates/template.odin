@@ -12,6 +12,8 @@ Symbol :: enum { EOF, ERR } //d
 //e
 //w  }
 
+Value :: struct { symbol: Symbol, value: any }
+
 HANDLES_ERRORS := map[int]struct{}{} //d
 //l HANDLES_ERRORS := map[int]struct{}{
 //state
@@ -36,59 +38,80 @@ PARCELR_DEBUG :: true
 
 when PARCELR_DEBUG {
   main :: proc() {
-    symbols := make([dynamic]Symbol)
+    symbols := make([dynamic]Value)
+    defer delete(symbols)
+
     if len(os.args) >= 2 {
       for s in os.args[1:] {
-        for w in strings.split(s, " ") {
+        strs := strings.split(s, " ")
+        defer delete(strs)
+
+        for w in strs {
           switch w {
           //lexeme
-            //l case "${lexeme.name}": append(&symbols, Symbol.${lexeme.enum})
+            //l case "${lexeme.name}": append(&symbols, Value{ .${lexeme.enum}, new_any(w) })
           //e
-            case: append(&symbols, Symbol.ERR)
+            case: append(&symbols, Value{ .ERR, nil })
           }
         }
       }
     }
-    fmt.println(symbol_name(parse(symbols[:])))
+
+    parsed := parse(symbols[:])
+    fmt.println(symbol_name(parsed.symbol), parsed.value)
   }
 }
 
-parse :: proc(lexemes: []Symbol) -> Symbol {
+Pair :: struct($Key, $Value: typeid) {
+  key: Key,
+  value: Value,
+}
+as :: proc(ptr: any, $T: typeid) -> ^T {
+  return (^T)(ptr.data)
+}
+deref :: proc(ptr: any, $T: typeid) -> T {
+  defer free(ptr.data)
+  return as(ptr, T)^
+}
+new_any :: proc(data: $T) -> any {
+  return any{new_clone(data), typeid_of(T)}
+}
+
+parse :: proc(lexemes: []Value) -> Value {
   stack := slice.clone_to_dynamic(lexemes)
   slice.reverse(stack[:])
 
-  State :: struct { symbol: Symbol, state: int }
+  State :: struct { symbol: Symbol, value: any, state: int }
 
-  shifted := make([dynamic]State)
+  shifted: #soa[dynamic]State
   state := 0
   errors := 0
 
   defer delete(stack)
-  defer delete(shifted)
+  defer delete_soa(shifted)
 
-  peek :: proc(a: []Symbol) -> Symbol {
+  peek :: proc(a: []Value) -> Symbol {
     i := len(a) - 1
-    if i >= 0 do return a[i]
-    return Symbol.EOF
+    if i >= 0 do return a[i].symbol
+    return .EOF
   }
 
-  shift :: proc(stack: ^[dynamic]Symbol, shifted: ^[dynamic]State, state: ^int, new_state: int, errors: ^int) {
-    symbol := pop_safe(stack) or_else Symbol.EOF
-    if symbol == .ERR do errors^ += 1
-    append(shifted, State { symbol, state^ })
+  shift :: proc(stack: ^[dynamic]Value, shifted: ^#soa[dynamic]State, state: ^int, new_state: int, errors: ^int) {
+    val := pop_safe(stack) or_else Value{ .EOF, nil }
+    if val.symbol == .ERR do errors^ += 1
+    append_soa(shifted, State { val.symbol, val.value, state^ })
     state^ = new_state
   }
 
-  reduce :: proc(stack: ^[dynamic]Symbol, shifted: ^[dynamic]State, state: ^int, errors: ^int, f: $T/proc(symbols: [$N]Symbol) -> Symbol) {
-    symbols : [N]Symbol = ---
+  reduce :: proc(stack: ^[dynamic]Value, shifted: ^#soa[dynamic]State, state: ^int, errors: ^int, f: $T/proc(children: [$N]any) -> Value) {
+    vals: [N]any = ---
     when N > 0 {
+      _, values, _ := soa_unzip(shifted^[:])
+      copy_slice(vals[:], values[len(values) - N:])
       state^ = shifted[len(shifted) - N].state
+      resize_soa(shifted, len(shifted) - N)
     }
-    for i := N - 1; i >= 0; i -= 1 {
-      symbols[i] = pop(shifted).symbol
-      if symbols[i] == .ERR do errors^ -= 1
-    }
-    append(stack, f(symbols))
+    append(stack, f(vals))
   }
 
   for {
@@ -98,7 +121,7 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
       }
       fmt.printf("\u001b[100m%i", state)
       for i := len(stack) - 1; i >= 0; i -= 1 {
-        fmt.printf(" %s\u001b[0m", symbol_name(stack[i]))
+        fmt.printf(" %s\u001b[0m", symbol_name(stack[i].symbol))
       }
       fmt.printf(" %s\u001b[0m", symbol_name(.EOF))
       fmt.println()
@@ -117,7 +140,7 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           //e
           //w :
           //lah.accept
-            //l return shifted[0].symbol
+            //l return Value{ shifted[0].symbol, shifted[0].value }
           //e
           //lah.shift
             //l shift(&stack, &shifted, &state, ${shift}, &errors)
@@ -126,7 +149,13 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
           //lah.reduce
             //l when PARCELR_DEBUG { fmt.println("reduce ${reduce}") }
             //l reduce(&stack, &shifted, &state, &errors,
-            //l   proc (symbols: [${reduce.rhs.length}]Symbol) -> Symbol { return Symbol.${reduce.lhs.enum} })
+            //l   proc (children: [${reduce.rhs.length}]any) -> Value {
+            //l     this: any
+            //reduce.code
+              //l   ${reduce.code}
+            //e
+            //l     return { .${reduce.lhs.enum}, this }
+            //l   })
             //l continue
           //e
         //e
@@ -136,23 +165,23 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
 
     if errors > 0 {
       if state in HANDLES_ERRORS {
-        append(&stack, Symbol.ERR)
+        append(&stack, Value{ .ERR, nil })
         continue
       }
       
-      if len(stack) == 0 do return .ERR
+      if len(stack) == 0 do return Value{ .ERR, nil }
       pop(&stack)
       continue
     }
     
     if symbol != .ERR {
-      append(&stack, Symbol.ERR)
+      append(&stack, Value{ .ERR, nil })
       continue
     }
     
-    if len(shifted) == 0 do return .ERR
-    popped_state := pop(&shifted)
-    state = popped_state.state
+    if len(shifted) == 0 do return Value{ .ERR, nil }
+    state = shifted[len(shifted) - 1].state
+    resize_soa(&shifted, len(shifted) - 1)
     continue
   }
 }

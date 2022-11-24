@@ -1,34 +1,34 @@
-json -> value .
+json -> value . ## this = children[0] ##
 
-value -> object .
-value -> array .
-value -> string .
-value -> number .
-value -> "true" .
-value -> "false" .
-value -> "null" .
+value -> object .  ## this = children[0]         ##
+value -> array .   ## this = children[0]         ##
+value -> string .  ## this = new_any("string")   ##
+value -> number .  ## this = new_any(69)         ##
+value -> "true" .  ## this = new_any(true)       ##
+value -> "false" . ## this = new_any(false)      ##
+value -> "null" .  ## this = nil                 ##
 
-object -> "{" "}" .
-object -> "{" members "}" .
-object -> "{" premembers error "}" .
+object -> "{" "}" .                  ## this = new_any(map[string]any{}) ##
+object -> "{" members "}" .          ## this = children[1] ##
+object -> "{" premembers error "}" . ## this = children[1] ##
 
-members -> member .
-members -> premembers member .
-premembers -> member "," .
-premembers -> premembers member "," .
-premembers -> error "," .
-premembers -> premembers error "," .
+premembers -> premembers member "," . ## this = children[0]; pair := deref(children[1], Pair(string, any)); as(this, map[string]any)[pair.key] = pair.value ##
+members -> premembers member .        ## this = children[0]; pair := deref(children[1], Pair(string, any)); as(this, map[string]any)[pair.key] = pair.value ##
+members -> member .                   ## this = new_any(make(map[string]any)); pair := deref(children[0], Pair(string, any)); as(this, map[string]any)[pair.key] = pair.value ##
+premembers -> member "," .            ## this = new_any(make(map[string]any)); pair := deref(children[0], Pair(string, any)); as(this, map[string]any)[pair.key] = pair.value ##
+premembers -> premembers error "," .  ## this = children[0] ##
+premembers -> error "," .             ## this = new_any(make(map[string]any)) ##
 
-member -> string ":" value .
-member -> error ":" value .
+member -> string ":" value . ## this = new_any(Pair(string, any){ deref(children[0], string), children[2] }) ##
+member -> error ":" value .  ## this = new_any(Pair(string, any){ {}, children[2] }) ##
 
-array -> "[" "]" .
-array -> "[" values "]" .
-array -> "[" prevalues error "]" .
+array -> "[" "]" .                 ## this = new_any([]any{}) ##
+array -> "[" values "]" .          ## this = new_any(deref(children[1], [dynamic]any)[:]) ##
+array -> "[" prevalues error "]" . ## this = new_any(deref(children[1], [dynamic]any)[:]) ##
 
-values -> value .
-values -> prevalues value .
-prevalues -> value "," .
-prevalues -> prevalues value "," .
-prevalues -> error "," .
-prevalues -> prevalues error "," .
+prevalues -> prevalues value "," . ## this = children[0]; append(as(this, [dynamic]any), children[1]) ##
+values -> prevalues value .        ## this = children[0]; append(as(this, [dynamic]any), children[1]) ##
+values -> value .                  ## this = new_any(make([dynamic]any)); append(as(this, [dynamic]any), children[0]) ##
+prevalues -> value "," .           ## this = new_any(make([dynamic]any)); append(as(this, [dynamic]any), children[0]) ##
+prevalues -> prevalues error "," . ## this = children[0] ##
+prevalues -> error "," .           ## this = new_any(make([dynamic]any)) ##
