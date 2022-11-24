@@ -95,6 +95,8 @@ make_globals :: proc(g: Grammar, table: Table) -> Globals {
         clone := make([]Token, len(lah[k].symbol) + 1)
         copy(clone, lah[k].symbol)
         clone[len(clone) - 1] = { g.symbols[symbol], g.enum_names[symbol] }
+
+        delete(lah[k].symbol)
         lah[k].symbol = clone
         continue
       }
@@ -131,27 +133,27 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
     case LookaheadVal:
       switch s {
         case "symbol":
-          return v.symbol, true
+          return slice.clone(v.symbol), true
         case "accept":
           return v.accept, true
         case "shift":
-          return v.shift, true
+          return slice.clone(v.shift), true
         case "reduce":
-          return v.reduce, true
+          return slice.clone(v.reduce), true
       }
     case ReduceVal:
       switch s {
         case "lhs":
           return v.lhs, true
         case "rhs":
-          return v.rhs, true
+          return slice.clone(v.rhs), true
       }
     case StateVal:
       switch s {
         case "index":
           return v.index, true
         case "lookahead":
-          return v.lookahead, true
+          return slice.clone(v.lookahead), true
       }
     case Token:
       switch s {
@@ -171,17 +173,17 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
           return len(v), true
         case:
           i := strconv.parse_int(s, 10) or_return
-          return []void{{}} if slice.contains(v, i) else []void{}, true
+          return slice.count(v, i), true
       }
     case []string:
       switch s {
         case "length":
           return len(v), true
         case:
-          return []void{{}} if slice.contains(v, s) else []void{}, true
+          return slice.count(v, s), true
       }
     case []LookaheadVal, []ReduceVal, []StateVal, []Token:
-      it, _ := as_slice(val)
+      it, _ := as_slice(val, false)
       switch s {
         case "length":
           return it.len, true
@@ -190,7 +192,8 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
           defer delete(children)
           for elem in iterate_values(&it) {
             child := get_child(elem, s) or_return
-            if it2, ok := as_slice(child); ok {
+            if it2, ok := as_slice(child, false); ok {
+              defer delete_value_slice(child)
               for elem2 in iterate_values(&it2) {
                 append(&children, elem2)
               }
@@ -202,6 +205,43 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
       }
   }
   return ---, false
+}
+
+delete_value :: proc(val: Value) {
+  #partial switch v in val {
+    case LookaheadVal:
+      delete_value(v.reduce)
+      delete(v.shift)
+      delete(v.symbol)
+    case ReduceVal:
+      delete(v.rhs)
+    case StateVal:
+      delete_value(v.lookahead)
+    case:
+      if it, ok := as_slice(val, false); ok {
+        for v in iterate_values(&it) {
+          delete_value(v)
+        }
+        delete_value_slice(val)
+      }
+  }
+}
+
+delete_value_slice :: proc(val: Value) {
+  #partial switch v in val {
+    case []LookaheadVal:
+      delete(v)
+    case []ReduceVal:
+      delete(v)
+    case []StateVal:
+      delete(v)
+    case []Token:
+      delete(v)
+    case []int:
+      delete(v)
+    case []string:
+      delete(v)
+  }
 }
 
 cast_slice :: proc(s: $T/[]$E, $A: typeid) -> []A {
@@ -269,8 +309,13 @@ iterate_values :: proc(val: ^ValueIterator) -> (Value, int, bool) {
   return ---, ---, false
 }
 
-as_slice :: proc(val: Value) -> (ValueIterator, bool) {
+as_slice :: proc(val: Value, ints: bool) -> (ValueIterator, bool) {
   #partial switch v in val {
+    case int:
+      if ints {
+        // return a slice of N voids
+        return { v, 0, slice.from_ptr((^void)(nil), v) }, true
+      }
     case []void, []int, []string, []LookaheadVal, []ReduceVal, []StateVal, []Token:
       p := val
       return { len((^[]void)(&p)^), 0, v }, true
@@ -283,7 +328,9 @@ get_value :: proc(var: Var, stack: []StackElement) -> (value: Value, ok: bool) {
     if var[0] != stack[i].var do continue
     
     value = stack[i].value
-    for s in var[1:] {
+    for s, i in var[1:] {
+      parent := value
+      defer if i > 0 do delete_value_slice(parent)
       value = get_child(value, s) or_return
     }
     return value, true
@@ -312,7 +359,7 @@ StackElement :: struct {
   value: Value,
 }
 
-eval :: proc(directives: []Directive, g: Grammar, table: Table) -> (s: string, ok: bool) {
+eval :: proc(directives: []Directive, g: Grammar, table: Table) -> (string, bool) {
   globals := make_globals(g, table)
 
   stack := make([dynamic]StackElement)
@@ -320,10 +367,21 @@ eval :: proc(directives: []Directive, g: Grammar, table: Table) -> (s: string, o
   append(&stack, StackElement{ "symbol", globals.symbol })
   append(&stack, StackElement{ "lexeme", globals.lexeme })
 
+  defer {
+    delete_value(stack[0].value)
+    delete_value(stack[1].value)
+    delete_value(stack[2].value)
+    delete(stack)
+  }
+
   sb := strings.builder_make_none()
 
   dirs := directives
-  _eval(&sb, &stack, &dirs, false) or_return
+  ok := _eval(&sb, &stack, &dirs, false)
+  if !ok {
+    strings.builder_destroy(&sb)
+    return ---, false;
+  }
   return strings.to_string(sb), true
 }
 
@@ -365,11 +423,16 @@ _eval :: proc(sb: ^strings.Builder, stack: ^[dynamic]StackElement, directives: ^
         fmt.sbprint(sb, v.after)
         for varlit in v.vars {
           val := get_value(varlit.var, stack[:]) or_return
+          defer if len(varlit.var) > 1 do delete_value_slice(val)
+
           print_value(sb, val) or_return
           fmt.sbprint(sb, varlit.lit)
         }
       case Start:
-        it := as_slice(get_value(v.var, stack[:]) or_return) or_return
+        val := get_value(v.var, stack[:]) or_return
+        defer if len(v.var) > 1 do delete_value_slice(val)
+
+        it := as_slice(val, true) or_return
         for val, idx in iterate_values(&it) {
           append(stack, StackElement{ v.name, val })
           dirs := directives^;
@@ -382,6 +445,22 @@ _eval :: proc(sb: ^strings.Builder, stack: ^[dynamic]StackElement, directives: ^
     }
   }
   return true
+}
+
+delete_directives :: proc(dirs: []Directive) {
+  for dir in dirs {
+    switch d in dir {
+      case Start:
+        delete(d.var)
+      case Write:
+        for v in d.vars {
+          delete(v.var)
+        }
+        delete(d.vars)
+      case End:
+    }
+  }
+  delete(dirs)
 }
 
 parse_template :: proc(template, prefix: string) -> ([]Directive, bool) {
@@ -421,7 +500,14 @@ parse_template :: proc(template, prefix: string) -> ([]Directive, bool) {
         entries := make([dynamic]WriteEntry)
         for index > -1 {
           end := strings.index(next[index + 2:], "}")
-          if end == -1 do return ---, false
+          if end == -1 {
+            for entry in entries {
+              delete(entry.var)
+            }
+            delete(entries)
+            delete_directives(directives[:])
+            return ---, false
+          }
 
           var := strings.split(strings.trim_space(next[index + 2:index + 2 + end]), ".")
           

@@ -27,7 +27,25 @@ ERR  :: Lexeme(1)
 
 void :: struct{}
 
-parse :: proc(d: []u8) -> (Grammar, bool) {
+Error :: distinct string
+
+delete_grammar :: proc(g: Grammar) {
+  for rule in g.rules {
+    delete(rule.rhs)
+  }
+  for name in g.symbols[3:] {
+    delete(name)
+  }
+  for name in g.enum_names[3:] {
+    delete(name)
+  }
+  delete(g.rules)
+  delete(g.symbols)
+  delete(g.lexemes)
+  delete(g.enum_names)
+}
+
+parse :: proc(d: []u8) -> (Grammar, Error) {
   rules      := make([dynamic]RuleDefinition)
   enum_names := make([dynamic]string)
   names      := make([dynamic]string)
@@ -106,13 +124,19 @@ parse :: proc(d: []u8) -> (Grammar, bool) {
     token, rest := parse_token(data)
     data = rest
 
-    if token == ""                   do break
-    if token == "." || token == "->" do panic("lhs or EOF expected")
+    if token == "" do break
+    if token == "." || token == "->" {
+      delete_grammar({ rules[:], enum_names[:], names[:], {} })
+      return ---, "lhs or EOF expected"
+    }
 
     {
       token, rest := parse_token(data)
       data = rest
-      if token != "->" do panic("'->' expected")
+      if token != "->" {
+        delete_grammar({ rules[:], enum_names[:], names[:], {} })
+        return ---, "'->' expected"
+      }
     }
     
     lhs := get_symbol(&names, &enum_names, token)
@@ -124,8 +148,11 @@ parse :: proc(d: []u8) -> (Grammar, bool) {
       token, rest := parse_token(data)
       data = rest
 
-      if token == "."                 do break
-      if token == "" || token == "->" do panic("rhs or '.' expected")
+      if token == "." do break
+      if token == "" || token == "->" {
+        delete_grammar({ rules[:], enum_names[:], names[:], {} })
+        return ---, "rhs or '.' expected"
+      }
     
       append(&rhs, get_symbol(&names, &enum_names, token))
     }
@@ -148,5 +175,5 @@ parse :: proc(d: []u8) -> (Grammar, bool) {
     enum_names[:],
     names[:],
     lexemes,
-  }, true
+  }, {}
 }

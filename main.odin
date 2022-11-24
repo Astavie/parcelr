@@ -2,8 +2,24 @@ package main
 
 import "core:fmt"
 import "core:os"
+import "core:mem"
 
 main :: proc() {
+    track: mem.Tracking_Allocator
+    mem.tracking_allocator_init(&track, context.allocator)
+    context.allocator = mem.tracking_allocator(&track)
+
+    _main()
+
+    for _, leak in track.allocation_map {
+        fmt.printf("%v leaked %v bytes\n", leak.location, leak.size)
+    }
+    for bad_free in track.bad_free_array {
+        fmt.printf("%v allocation %p was freed badly\n", bad_free.location, bad_free.memory)
+    }
+}
+
+_main :: proc() {
   if len(os.args) < 3 {
     fmt.println("parcelr LR0|SLR1|CLR1|LALR1 [file]")
     return
@@ -29,9 +45,14 @@ main :: proc() {
     fmt.println("unknown file")
     return
   }
+  defer delete(file)
 
-  g, _ := parse(file)
-
+  g, err := parse(file)
+  if err != {} {
+    fmt.printf("could not parse grammar: %s\n", err)
+    return
+  }
+  defer delete_grammar(g)
   print_grammar(g)
   fmt.println()
 
@@ -44,13 +65,42 @@ main :: proc() {
   print_lookahead_table(g, follow)
   fmt.println()
 
-  table := calc_table(g, type, empty, first, follow)
+  defer {
+    delete(empty)
+    delete(first)
+    delete(follow)
+  }
+
+  table, err2 := calc_table(g, type, empty, first, follow)
+  if err2 != {} {
+    fmt.printf("could not calculate table: %s\n", err2)
+    return
+  }
+  defer delete_table(table)
   print_table(g, table)
   fmt.println()
  
-  template, _ := os.read_entire_file("templates/template.odin")
-  dirs,     _ := parse_template(transmute(string)template, "//")
+  template, ok3 := os.read_entire_file("templates/template.odin")
+  if !ok3 {
+    fmt.println("could not read template")
+    return
+  }
+  defer delete(template)
 
-  e, _ := eval(dirs, g, table)
+  dirs, ok4 := parse_template(transmute(string)template, "//")
+  if !ok4 {
+    fmt.println("could not parse template")
+    return
+  }
+  defer delete_directives(dirs)
+
+  e, ok5 := eval(dirs, g, table)
+  if !ok5 {
+    fmt.println("could not evaluate template")
+    return
+  }
+  defer delete(e)
+
   os.write_entire_file("out", transmute([]byte)e)
+  fmt.println("SUCCESS")
 }

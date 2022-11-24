@@ -146,7 +146,14 @@ indexof_slice :: proc(a : $T/[][]$E, b : []E) -> (int, bool) {
   return ---, false
 }
 
-calc_table :: proc(g : Grammar, type : Analyser, empty: map[Symbol]void, first : []Lookahead, follow : []Lookahead) -> Table {
+delete_table :: proc(t: Table) {
+  for row in t {
+    delete(row)
+  }
+  delete(t)
+}
+
+calc_table :: proc(g : Grammar, type : Analyser, empty: map[Symbol]void, first : []Lookahead, follow : []Lookahead) -> (Table, Error) {
   
   StackEntry :: struct {
     set   : []Item,
@@ -202,9 +209,11 @@ calc_table :: proc(g : Grammar, type : Analyser, empty: map[Symbol]void, first :
               // TODO better errors
               switch in table[i][next] {
                 case Shift:
-                  panic("SHIFT/REDUCE CONFLICT")
+                  delete_table(table[:])
+                  return ---, "SHIFT/REDUCE CONFLICT"
                 case Reduce:
-                  panic("REDUCE/REDUCE CONFLICT")
+                  delete_table(table[:])
+                  return ---, "REDUCE/REDUCE CONFLICT"
               }
             }
             table[i][next] = e
@@ -217,7 +226,8 @@ calc_table :: proc(g : Grammar, type : Analyser, empty: map[Symbol]void, first :
             case Shift:
               // we assume we are merging two identical shifts
             case Reduce:
-              panic("SHIFT/REDUCE CONFLICT")
+              delete_table(table[:])
+              return ---, "SHIFT/REDUCE CONFLICT"
           }
         }
 
@@ -235,7 +245,11 @@ calc_table :: proc(g : Grammar, type : Analyser, empty: map[Symbol]void, first :
           
             idx, ok = indexof_slice(final_sets[:], clone)
             
-            if !ok do append(&final_sets, clone)
+            if ok {
+              delete(clone)
+            } else {
+              append(&final_sets, clone)
+            }
           }
           
           if ok {
@@ -253,7 +267,7 @@ calc_table :: proc(g : Grammar, type : Analyser, empty: map[Symbol]void, first :
     }
   }
 
-  return table[:]
+  return table[:], {}
 }
 
 contains_all :: proc(a : $T/map[$K]$V, b : []K) -> bool {

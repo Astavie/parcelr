@@ -633,7 +633,7 @@ parse :: proc(lexemes: []Symbol) -> Symbol {
     }
 
     if errors > 0 {
-      if symbol != .ERR && state in HANDLES_ERRORS {
+      if state in HANDLES_ERRORS {
         append(&stack, Symbol.ERR)
         continue
       }
