@@ -66,14 +66,6 @@ make_single :: proc(e: $E) -> []E {
 }
 
 make_globals :: proc(g: Grammar, table: Table) -> Globals {
-  select :: proc(as: $T/[]$A, f: proc(a: A) -> $B) -> []B {
-    ret := make([]B, len(as))
-    for a, i in as {
-      ret[i] = f(a)
-    }
-    return ret
-  }
-
   globals := Globals {
     make([]StateVal, len(table)),
     g.symbols[1:],
@@ -192,6 +184,15 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
         case "length":
           return it.len, true
         case:
+          // get slice index
+          if i, ok := strconv.parse_int(s, 10); ok {
+            if i >= 0 && i < it.len do for elem, idx in iterate_values(&it) {
+              if i == idx do return elem, true
+            }
+            return []void{}, true
+          }
+
+          // get children of elements
           children := make([dynamic]Value)
           defer delete(children)
           for elem in iterate_values(&it) {

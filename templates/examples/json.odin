@@ -83,12 +83,11 @@ when PARCELR_DEBUG {
       }
     }
 
-    parsed := parse(symbols[:])
-    fmt.println(symbol_name(parsed.symbol), parsed.value)
+    fmt.println(parse(symbols[:]))
   }
 }
 
-parse :: proc(lexemes: []SymbolValue) -> SymbolValue {
+parse :: proc(lexemes: []SymbolValue) -> (Value,bool) {
   stack := slice.clone_to_dynamic(lexemes)
   slice.reverse(stack[:])
 
@@ -183,7 +182,7 @@ parse :: proc(lexemes: []SymbolValue) -> SymbolValue {
       case 1:
         #partial switch symbol {
           case .EOF:
-            return SymbolValue{ shifted[0].symbol, shifted[0].value }
+            return deref(shifted[0].value, Value), true
         }
       case 2:
         #partial switch symbol {
@@ -775,7 +774,7 @@ parse :: proc(lexemes: []SymbolValue) -> SymbolValue {
         continue
       }
 
-      if len(stack) == 0 do return SymbolValue{ .ERR, nil }
+      if len(stack) == 0 do return ---, false
       pop(&stack)
       continue
     }
@@ -785,7 +784,7 @@ parse :: proc(lexemes: []SymbolValue) -> SymbolValue {
       continue
     }
 
-    if len(shifted) == 0 do return SymbolValue{ .ERR, nil }
+    if len(stack) == 0 do return ---, false
     state = shifted[len(shifted) - 1].state
     resize_soa(&shifted, len(shifted) - 1)
     continue

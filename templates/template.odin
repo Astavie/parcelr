@@ -61,12 +61,16 @@ when PARCELR_DEBUG {
       }
     }
 
-    parsed := parse(symbols[:])
-    fmt.println(symbol_name(parsed.symbol), parsed.value)
+    fmt.println(parse(symbols[:]))
   }
 }
 
-parse :: proc(lexemes: []SymbolValue) -> SymbolValue {
+parse :: proc(lexemes: []SymbolValue) -> bool { // d
+//l parse :: proc(lexemes: []SymbolValue) -> (
+//symbol.2.type
+  //w ${type},
+//e
+//w bool) {
   stack := slice.clone_to_dynamic(lexemes)
   slice.reverse(stack[:])
 
@@ -134,7 +138,11 @@ parse :: proc(lexemes: []SymbolValue) -> SymbolValue {
           //e
           //w :
           //lah.accept
-            //l return SymbolValue{ shifted[0].symbol, shifted[0].value }
+            //l return
+            //symbol.2.type
+              //w  deref(shifted[0].value, ${type}),
+            //e
+            //w  true
           //e
           //lah.shift
             //l shift(&stack, &shifted, &state, ${shift}, &errors)
@@ -172,7 +180,12 @@ parse :: proc(lexemes: []SymbolValue) -> SymbolValue {
         continue
       }
 
-      if len(stack) == 0 do return SymbolValue{ .ERR, nil }
+      if len(stack) == 0 do return false //d
+      //l if len(stack) == 0 do return
+      //symbol.2.type
+        //w  ---,
+      //e
+      //w  false
       pop(&stack)
       continue
     }
@@ -182,7 +195,12 @@ parse :: proc(lexemes: []SymbolValue) -> SymbolValue {
       continue
     }
 
-    if len(shifted) == 0 do return SymbolValue{ .ERR, nil }
+    if len(shifted) == 0 do return false //d
+    //l if len(stack) == 0 do return
+    //symbol.2.type
+      //w  ---,
+    //e
+    //w  false
     state = shifted[len(shifted) - 1].state
     resize_soa(&shifted, len(shifted) - 1)
     continue
