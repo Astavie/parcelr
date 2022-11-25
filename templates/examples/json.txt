@@ -15,48 +15,33 @@ Values :: [dynamic]Value
 //
 
 json // Value //
- -> value                    // this = _0 //
+ -> value              // this = _0 //
 ;
 value // Value //
- -> object                   // this = _0       //
- -> array                    // this = _0       //
- -> string                   // this = "string" //
- -> number                   // this = 69       //
- -> "true"                   // this = true     //
- -> "false"                  // this = false    //
- -> "null"                   // this = Null{}   //
+ -> object             // this = _0       //
+ -> array              // this = _0       //
+ -> string             // this = "string" //
+ -> number             // this = 69       //
+ -> "true"             // this = true     //
+ -> "false"            // this = false    //
+ -> "null"             // this = Null{}   //
 ;
 object // Object //
- -> "{" "}"                  // this = Object{} //
- -> "{" members "}"          // this = _1       //
- -> "{" premembers error "}" // this = _1       //
+ -> "{" "}"            // this = Object{} //
+ -> "{" members "}"    // this = _1       //
 ;
 members // Object //
- -> premembers member        // this = _0;           this[_1.key] = _1.value //
- -> member                   // this = make(Object); this[_0.key] = _0.value //
-;
-premembers // Object //
- -> premembers member ","    // this = _0;           this[_1.key] = _1.value //
- -> member ","               // this = make(Object); this[_0.key] = _0.value //
- -> premembers error ","     // this = _0                                    //
- -> error ","                // this = make(Object)                          //
+ ->             member // this = make(Object); this[_0.key] = _0.value //
+ -> members "," member // this = _0;           this[_2.key] = _2.value //
 ;
 member // Entry //
- -> string ":" value         // this = Entry{ "string", _2 } //
- -> error ":" value          // this = Entry{ {}      , _2 } //
+ -> string ":" value   // this = Entry{ "string", _2 } //
 ;
 array // Array //
- -> "[" "]"                  // this = Array{} //
- -> "[" values "]"           // this = _1[:]   //
- -> "[" prevalues error "]"  // this = _1[:]   //
+ -> "[" "]"            // this = Array{} //
+ -> "[" values "]"     // this = _1[:]   //
 ;
 values // Values //
- -> prevalues value          // this = _0;           append(&this, _1) //
- -> value                    // this = make(Values); append(&this, _0) //
-;
-prevalues // Values //
- -> prevalues value ","      // this = _0;           append(&this, _1) //
- -> value ","                // this = make(Values); append(&this, _0) //
- -> prevalues error ","      // this = _0                              //
- -> error ","                // this = make(Values)                    //
+ ->            value   // this = make(Values); append(&this, _0) //
+ -> values "," value   // this = _0;           append(&this, _2) //
 ;

@@ -61,7 +61,14 @@ when PARCELR_DEBUG {
       }
     }
 
+    fmt.println()
+    for sym in symbols {
+      fmt.printf("%s ", symbol_name(sym.symbol))
+    }
+    fmt.println()
+    fmt.println()
     fmt.println(parse(symbols[:]))
+    fmt.println()
   }
 }
 
@@ -112,18 +119,25 @@ parse :: proc(lexemes: []SymbolValue) -> bool { // d
     append(stack, f(vals))
   }
 
-  for {
-    when PARCELR_DEBUG {
-      for s in shifted {
-        fmt.printf("\u001b[90m%i\u001b[0m %s ", s.state, symbol_name(s.symbol))
+  when PARCELR_DEBUG {
+    dump :: proc(stack: [dynamic]SymbolValue, shifted: #soa[dynamic]State, state: int, size: int) {
+      for s, i in shifted {
+        if i >= len(shifted) - size {
+          fmt.printf(" \u001b[46m\u001b[90m%i\u001b[30m %s", s.state, symbol_name(s.symbol))
+        } else {
+          fmt.printf(" \u001b[90m%i\u001b[39m %s", s.state, symbol_name(s.symbol))
+        }
       }
-      fmt.printf("\u001b[100m%i", state)
+      fmt.printf("\u001b[0m \u001b[100m%i", state)
       for i := len(stack) - 1; i >= 0; i -= 1 {
         fmt.printf(" %s\u001b[0m", symbol_name(stack[i].symbol))
       }
       fmt.printf(" %s\u001b[0m", symbol_name(.EOF))
       fmt.println()
     }
+  }
+
+  for {
     symbol := peek(stack[:])
     switch state {
     //state
@@ -138,6 +152,10 @@ parse :: proc(lexemes: []SymbolValue) -> bool { // d
           //e
           //w :
           //lah.accept
+            //l when PARCELR_DEBUG {
+            //l   dump(stack, shifted, state, 2)
+            //l   fmt.println()
+            //l }
             //l return
             //symbol.2.type
               //w  deref(shifted[0].value, ${type}),
@@ -149,7 +167,10 @@ parse :: proc(lexemes: []SymbolValue) -> bool { // d
             //l continue
           //e
           //lah.reduce
-            //l when PARCELR_DEBUG { fmt.println("reduce ${reduce}") }
+            //l when PARCELR_DEBUG {
+            //l   dump(stack, shifted, state, ${reduce.rhs.length})
+            //l   fmt.println("    reduce ${reduce}")
+            //l }
             //l reduce(&stack, &shifted, &state, &errors,
             //l   proc (children: [${reduce.rhs.length}]rawptr) -> SymbolValue {
             //l     ret: rawptr
