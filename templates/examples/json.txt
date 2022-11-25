@@ -1,34 +1,62 @@
-json -> value . ## this = children[0] ##
+//
 
-value -> object .  ## this = children[0]         ##
-value -> array .   ## this = children[0]         ##
-value -> string .  ## this = new_any("string")   ##
-value -> number .  ## this = new_any(69)         ##
-value -> "true" .  ## this = new_any(true)       ##
-value -> "false" . ## this = new_any(false)      ##
-value -> "null" .  ## this = nil                 ##
+Entry :: struct {
+  key: string,
+  value: Value,
+}
 
-object -> "{" "}" .                  ## this = new_any(map[string]any{}) ##
-object -> "{" members "}" .          ## this = children[1] ##
-object -> "{" premembers error "}" . ## this = children[1] ##
+Object :: map[string]Value
+Array :: []Value
+Null :: struct{}
+Value :: union #no_nil { Object, Array, string, int, bool, Null }
 
-premembers -> premembers member "," . ## this = children[0]; pair := deref(children[1], Pair(string, any)); as(this, map[string]any)[pair.key] = pair.value ##
-members -> premembers member .        ## this = children[0]; pair := deref(children[1], Pair(string, any)); as(this, map[string]any)[pair.key] = pair.value ##
-members -> member .                   ## this = new_any(make(map[string]any)); pair := deref(children[0], Pair(string, any)); as(this, map[string]any)[pair.key] = pair.value ##
-premembers -> member "," .            ## this = new_any(make(map[string]any)); pair := deref(children[0], Pair(string, any)); as(this, map[string]any)[pair.key] = pair.value ##
-premembers -> premembers error "," .  ## this = children[0] ##
-premembers -> error "," .             ## this = new_any(make(map[string]any)) ##
+Values :: [dynamic]Value
 
-member -> string ":" value . ## this = new_any(Pair(string, any){ deref(children[0], string), children[2] }) ##
-member -> error ":" value .  ## this = new_any(Pair(string, any){ {}, children[2] }) ##
+//
 
-array -> "[" "]" .                 ## this = new_any([]any{}) ##
-array -> "[" values "]" .          ## this = new_any(deref(children[1], [dynamic]any)[:]) ##
-array -> "[" prevalues error "]" . ## this = new_any(deref(children[1], [dynamic]any)[:]) ##
-
-prevalues -> prevalues value "," . ## this = children[0]; append(as(this, [dynamic]any), children[1]) ##
-values -> prevalues value .        ## this = children[0]; append(as(this, [dynamic]any), children[1]) ##
-values -> value .                  ## this = new_any(make([dynamic]any)); append(as(this, [dynamic]any), children[0]) ##
-prevalues -> value "," .           ## this = new_any(make([dynamic]any)); append(as(this, [dynamic]any), children[0]) ##
-prevalues -> prevalues error "," . ## this = children[0] ##
-prevalues -> error "," .           ## this = new_any(make([dynamic]any)) ##
+json // Value //
+ -> value                    // this = _0 //
+;
+value // Value //
+ -> object                   // this = _0       //
+ -> array                    // this = _0       //
+ -> string                   // this = "string" //
+ -> number                   // this = 69       //
+ -> "true"                   // this = true     //
+ -> "false"                  // this = false    //
+ -> "null"                   // this = Null{}   //
+;
+object // Object //
+ -> "{" "}"                  // this = Object{} //
+ -> "{" members "}"          // this = _1       //
+ -> "{" premembers error "}" // this = _1       //
+;
+members // Object //
+ -> premembers member        // this = _0;           this[_1.key] = _1.value //
+ -> member                   // this = make(Object); this[_0.key] = _0.value //
+;
+premembers // Object //
+ -> premembers member ","    // this = _0;           this[_1.key] = _1.value //
+ -> member ","               // this = make(Object); this[_0.key] = _0.value //
+ -> premembers error ","     // this = _0                                    //
+ -> error ","                // this = make(Object)                          //
+;
+member // Entry //
+ -> string ":" value         // this = Entry{ "string", _2 } //
+ -> error ":" value          // this = Entry{ {}      , _2 } //
+;
+array // Array //
+ -> "[" "]"                  // this = Array{} //
+ -> "[" values "]"           // this = _1[:]   //
+ -> "[" prevalues error "]"  // this = _1[:]   //
+;
+values // Values //
+ -> prevalues value          // this = _0;           append(&this, _1) //
+ -> value                    // this = make(Values); append(&this, _0) //
+;
+prevalues // Values //
+ -> prevalues value ","      // this = _0;           append(&this, _1) //
+ -> value ","                // this = make(Values); append(&this, _0) //
+ -> prevalues error ","      // this = _0                              //
+ -> error ","                // this = make(Values)                    //
+;

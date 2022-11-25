@@ -10,6 +10,7 @@ Var :: []string
 Start :: struct {
   var: Var,
   name: string,
+  index: string,
 }
 
 WriteEntry :: struct {
@@ -29,10 +30,7 @@ End :: distinct void
 
 Directive :: union #no_nil { Start, Write, End }
 
-Token :: struct {
-  name:       string,
-  enum_value: string,
-}
+Token :: SymbolDefinition
 
 LookaheadVal :: struct {
   symbol: []Token,
@@ -58,6 +56,7 @@ Globals :: struct {
   state:  []StateVal,
   symbol: []Token,
   lexeme: []Token,
+  preamble: string,
 }
 
 make_single :: proc(e: $E) -> []E {
@@ -67,23 +66,23 @@ make_single :: proc(e: $E) -> []E {
 }
 
 make_globals :: proc(g: Grammar, table: Table) -> Globals {
-  zip :: proc(a: $T/[]$A, b: $U/[]$B, f: proc(a: A, b: B) -> $C) -> []C {
-    ret := make([]C, min(len(a), len(b)))
-    for _, i in ret {
-      ret[i] = f(a[i], b[i])
+  select :: proc(as: $T/[]$A, f: proc(a: A) -> $B) -> []B {
+    ret := make([]B, len(as))
+    for a, i in as {
+      ret[i] = f(a)
     }
     return ret
   }
 
   globals := Globals {
     make([]StateVal, len(table)),
-    zip(g.symbols[1:], g.enum_names[1:],
-      proc(a, b: string) -> Token { return Token{ a, b } }),
+    g.symbols[1:],
     make([]Token, len(g.lexemes) - 1),
+    g.preamble,
   }
 
   for lex, i in g.lexemes[1:] {
-    globals.lexeme[i] = Token { g.symbols[lex], g.enum_names[lex] }
+    globals.lexeme[i] = g.symbols[lex]
   }
 
   for i in 0..<len(table) {
@@ -95,7 +94,7 @@ make_globals :: proc(g: Grammar, table: Table) -> Globals {
       if k, ok := lookup[decision]; ok {
         clone := make([]Token, len(lah[k].symbol) + 1)
         copy(clone, lah[k].symbol)
-        clone[len(clone) - 1] = { g.symbols[symbol], g.enum_names[symbol] }
+        clone[len(clone) - 1] = g.symbols[symbol]
 
         delete(lah[k].symbol)
         lah[k].symbol = clone
@@ -104,7 +103,7 @@ make_globals :: proc(g: Grammar, table: Table) -> Globals {
 
       j := len(lah)
       lookup[decision] = j
-      append(&lah, LookaheadVal { make_single(Token{ g.symbols[symbol], g.enum_names[symbol] }), nil, nil, nil })
+      append(&lah, LookaheadVal { make_single(g.symbols[symbol]), nil, nil, nil })
 
       switch v in decision {
         case Reduce:
@@ -112,10 +111,10 @@ make_globals :: proc(g: Grammar, table: Table) -> Globals {
             lah[j].accept = {{}}
           } else {
             rule := g.rules[v]
-            lhs := Token{ g.symbols[rule.lhs], g.enum_names[rule.lhs] }
+            lhs := g.symbols[rule.lhs]
             rhs := make([]Token, len(rule.rhs))
             for k in 0..<len(rhs) {
-              rhs[k] = { g.symbols[rule.rhs[k]], g.enum_names[rule.rhs[k]] }
+              rhs[k] = g.symbols[rule.rhs[k]]
             }
             lah[j].reduce = make_single(ReduceVal{ lhs, rhs, rule.code })
           }
@@ -163,7 +162,9 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
         case "name":
           return v.name, true
         case "enum":
-          return v.enum_value, true
+          return v.enum_name, true
+        case "type":
+          return v.type, true
       }
     case []void:
       switch s {
@@ -308,25 +309,29 @@ iterate_values :: proc(val: ^ValueIterator) -> (Value, int, bool) {
       return iterate(v, &val.indx)
     case []Token:
       return iterate(v, &val.indx)
+    case int:
+      // iterating an int gives 0 to itself
+      if val.indx >= v do break
+      val.indx += 1
+      return val.indx - 1, val.indx - 1, true
+    case string:
+      // iterating a string just gives itself if it is nonzero
+      if v == {} || val.indx >= 1 do break
+      val.indx += 1
+      return v, 0, true
   }
   return ---, ---, false
 }
 
-as_slice :: proc(val: Value, ints: bool) -> (ValueIterator, bool) {
+as_slice :: proc(val: Value, non_slices: bool) -> (ValueIterator, bool) {
   #partial switch v in val {
     case int:
-      if ints {
-        // return a slice of N voids
-        return { v, 0, slice.from_ptr((^void)(nil), v) }, true
+      if non_slices {
+        return { v, 0, v }, true
       }
     case string:
-      if ints {
-        // return if it is nonempty
-        if len(v) > 0 {
-          return { 1, 0, slice.from_ptr((^void)(nil), 1) }, true
-        } else {
-          return { 0, 0, []void{} }, true
-        }
+      if non_slices {
+        return { 1, 0, v }, true
       }
     case []void, []int, []string, []LookaheadVal, []ReduceVal, []StateVal, []Token:
       p := val
@@ -378,11 +383,13 @@ eval :: proc(directives: []Directive, g: Grammar, table: Table) -> (string, bool
   append(&stack, StackElement{ "state",  globals.state  })
   append(&stack, StackElement{ "symbol", globals.symbol })
   append(&stack, StackElement{ "lexeme", globals.lexeme })
+  append(&stack, StackElement{ "preamble", globals.preamble })
 
   defer {
     delete_value(stack[0].value)
-    delete_value(stack[1].value)
+    // delete_value(stack[1].value) // do note delete, directly taken from Grammar
     delete_value(stack[2].value)
+    delete_value(stack[3].value)
     delete(stack)
   }
 
@@ -447,8 +454,12 @@ _eval :: proc(sb: ^strings.Builder, stack: ^[dynamic]StackElement, directives: ^
         it := as_slice(val, true) or_return
         for val, idx in iterate_values(&it) {
           append(stack, StackElement{ v.name, val })
+          if v.index != {} do append(stack, StackElement{ v.index, idx })
+          
           dirs := directives^;
           _eval(sb, stack, &dirs, idx == it.len - 1) or_return
+          
+          if v.index != {} do pop(stack)
           pop(stack)
         }
         _skip(directives) or_return
@@ -547,11 +558,18 @@ parse_template :: proc(template, prefix: string) -> ([]Directive, bool) {
         if len(directive) > space {
           name = directive[space + 1:]
           space := strings.index_byte(name, ' ')
-          if (space != -1) do name = name[0:space]
+          if (space != -1) do name = name[:space]
+        }
+
+        index := ""
+        if len(directive) > space + 1 + len(name) {
+          index = directive[space + 1 + len(name) + 1:]
+          space := strings.index_byte(index, ' ')
+          if (space != -1) do index = index[:space]
         }
 
         if strings.trim_space(literal) != {} do append(&directives, Write{ literal, {}, {}, true, false })
-        append(&directives, Start{ var, name })
+        append(&directives, Start{ var, name, index })
     }
   }
 
