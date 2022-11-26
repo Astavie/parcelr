@@ -68,7 +68,7 @@ make_globals :: proc(g: grammar.Grammar, table: grammar.Table) -> Globals {
       }
     }
 
-    globals.state[i] = { lah[:] }
+    globals.state[i] = { i, lah[:] }
   }
   return globals
 }

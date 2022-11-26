@@ -24,6 +24,7 @@ ReduceVal :: struct {
 }
 
 StateVal :: struct {
+  index: int,
   lookahead: []LookaheadVal,
 }
 
@@ -53,6 +54,8 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
       }
     case StateVal:
       switch s {
+        case "index":
+          return v.index, true
         case "lookahead":
           return slice.clone(v.lookahead), true
       }

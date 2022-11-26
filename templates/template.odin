@@ -29,9 +29,9 @@ SymbolPair :: struct { symbol: Symbol, value: SymbolValue }
 
 HANDLES_ERRORS := map[int]struct{}{} //d
 //l HANDLES_ERRORS := map[int]struct{}{
-//state state index
+//state
   //state.lookahead.symbol.enum."ERR"
-    //w  ${index} = {},
+    //w  ${state.index} = {},
   //e
 //e
 //w  }
@@ -151,8 +151,8 @@ parse :: proc(lexemes: []SymbolPair) -> bool { // d
   for {
     symbol := peek(stack[:])
     switch state {
-    //state state index
-      //l case ${index}:
+    //state
+      //l case ${state.index}:
       case 0: //d
         #partial switch symbol {
         //state.lookahead lah
