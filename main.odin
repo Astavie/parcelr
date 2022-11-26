@@ -4,6 +4,9 @@ import "core:fmt"
 import "core:os"
 import "core:mem"
 
+import "codegen"
+import "grammar"
+
 main :: proc() {
     track: mem.Tracking_Allocator
     mem.tracking_allocator_init(&track, context.allocator)
@@ -25,7 +28,7 @@ _main :: proc() {
     return
   }
 
-  type : Analyser
+  type : grammar.Analyser
   switch os.args[1] {
     case "LR0":
       type = .LR0
@@ -47,22 +50,22 @@ _main :: proc() {
   }
   defer delete(file)
 
-  g, err := parse(file)
+  g, err := grammar.parse_grammar(file)
   if err != {} {
     fmt.printf("could not parse grammar: %s\n", err)
     return
   }
-  defer delete_grammar(g)
-  print_grammar(g)
+  defer grammar.delete_grammar(g)
+  grammar.print_grammar(g)
   fmt.println()
 
-  empty := calc_empty_set(g)
-  first := calc_first_sets(g, empty)
-  follow := calc_follow_sets(g, first, empty)
+  empty := grammar.calc_empty_set(g)
+  first := grammar.calc_first_sets(g, empty)
+  follow := grammar.calc_follow_sets(g, first, empty)
   
-  print_lookahead_table(g, first)
+  grammar.print_lookahead_table(g, first)
   fmt.println()
-  print_lookahead_table(g, follow)
+  grammar.print_lookahead_table(g, follow)
   fmt.println()
 
   defer {
@@ -71,13 +74,13 @@ _main :: proc() {
     delete(follow)
   }
 
-  table, err2 := calc_table(g, type, empty, first, follow)
+  table, err2 := grammar.calc_table(g, type, empty, first, follow)
   if err2 != {} {
     fmt.printf("could not calculate table: %s\n", err2)
     return
   }
-  defer delete_table(table)
-  print_table(g, table)
+  defer grammar.delete_table(table)
+  grammar.print_table(g, table)
   fmt.println()
  
   template, ok3 := os.read_entire_file("templates/template.odin")
@@ -87,14 +90,14 @@ _main :: proc() {
   }
   defer delete(template)
 
-  dirs, ok4 := parse_template(transmute(string)template, "//")
+  dirs, ok4 := codegen.parse_template(transmute(string)template, "//")
   if !ok4 {
     fmt.println("could not parse template: mismatched braces")
     return
   }
-  defer delete_directives(dirs)
+  defer codegen.delete_directives(dirs)
 
-  e, ok5 := eval(dirs, g, table)
+  e, ok5 := codegen.eval(dirs, g, table)
   if !ok5 {
     fmt.println("could not evaluate template")
     return

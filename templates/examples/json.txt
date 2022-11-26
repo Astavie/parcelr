@@ -27,7 +27,7 @@ value // Value //
  -> "null"             // this = Null{}   //
 ;
 object // Object //
- -> "{" "}"            // this = Object{} //
+ -> "{" "}"
  -> "{" members "}"    // this = _1       //
 ;
 members // Object //
@@ -38,7 +38,7 @@ member // Entry //
  -> string ":" value   // this = Entry{ "string", _2 } //
 ;
 array // Array //
- -> "[" "]"            // this = Array{} //
+ -> "[" "]"
  -> "[" values "]"     // this = _1[:]   //
 ;
 values // Values //

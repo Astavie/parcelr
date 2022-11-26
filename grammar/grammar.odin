@@ -1,4 +1,4 @@
-package main
+package grammar
 
 import "core:strings"
 import "core:fmt"
@@ -49,7 +49,7 @@ delete_grammar :: proc(g: Grammar) {
   delete(g.lexemes)
 }
 
-parse :: proc(d: []u8) -> (Grammar, Error) {
+parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
   rules      := make([dynamic]RuleDefinition)
   symbols    := make([dynamic]SymbolDefinition)
   nonlexemes := make(map[Symbol]void)

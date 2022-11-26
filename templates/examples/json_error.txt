@@ -27,7 +27,7 @@ value // Value //
  -> "null"                   // this = Null{}   //
 ;
 object // Object //
- -> "{" "}"                  // this = Object{} //
+ -> "{" "}"
  -> "{" members "}"          // this = _1       //
  -> "{" premembers error "}" // this = _1       //
 ;
@@ -46,7 +46,7 @@ member // Entry //
  -> error ":" value          // this = Entry{ {}      , _2 } //
 ;
 array // Array //
- -> "[" "]"                  // this = Array{} //
+ -> "[" "]"
  -> "[" values "]"           // this = _1[:]   //
  -> "[" prevalues error "]"  // this = _1[:]   //
 ;

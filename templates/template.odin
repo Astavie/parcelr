@@ -16,13 +16,22 @@ Symbol :: enum { EOF, ERR } //d
 //e
 //w  }
 
-SymbolValue :: struct { symbol: Symbol, value: rawptr }
+SymbolValue :: struct #raw_union {} //d
+//l SymbolValue :: struct #raw_union {
+//symbol
+  //symbol.type
+    //w  ${symbol.enum}: ${symbol.type},
+  //e
+//e
+//w  }
+
+SymbolPair :: struct { symbol: Symbol, value: SymbolValue }
 
 HANDLES_ERRORS := map[int]struct{}{} //d
 //l HANDLES_ERRORS := map[int]struct{}{
-//state
-  //state.lookahead.symbol.enum.ERR
-    //w  ${state.index} = {},
+//state state index
+  //state.lookahead.symbol.enum."ERR"
+    //w  ${index} = {},
   //e
 //e
 //w  }
@@ -42,7 +51,7 @@ PARCELR_DEBUG :: true
 
 when PARCELR_DEBUG {
   main :: proc() {
-    symbols := make([dynamic]SymbolValue)
+    symbols := make([dynamic]SymbolPair)
     defer delete(symbols)
 
     if len(os.args) >= 2 {
@@ -53,9 +62,9 @@ when PARCELR_DEBUG {
         for w in strs {
           switch w {
           //lexeme
-            //l case "${lexeme.name}": append(&symbols, SymbolValue{ .${lexeme.enum}, nil })
+            //l case "${lexeme.name}": append(&symbols, SymbolPair{ .${lexeme.enum}, --- })
           //e
-            case: append(&symbols, SymbolValue{ .ERR, nil })
+            case: append(&symbols, SymbolPair{ .ERR, --- })
           }
         }
       }
@@ -72,16 +81,23 @@ when PARCELR_DEBUG {
   }
 }
 
-parse :: proc(lexemes: []SymbolValue) -> bool { // d
-//l parse :: proc(lexemes: []SymbolValue) -> (
+parse :: proc(lexemes: []SymbolPair) -> bool { // d
+//l parse :: proc(lexemes: []SymbolPair) -> (
 //symbol.2.type
   //w ${type},
 //e
 //w bool) {
   stack := slice.clone_to_dynamic(lexemes)
-  slice.reverse(stack[:])
+  
+  n := len(stack)/2
+  for i in 0..<n {
+    a, b := i, len(stack)-i-1
+    tmp := stack[b]
+    stack[b] = stack[a]
+    stack[a] = tmp
+  }
 
-  State :: struct { symbol: Symbol, value: rawptr, state: int }
+  State :: struct { symbol: Symbol, value: SymbolValue, state: int }
 
   shifted: #soa[dynamic]State
   state := 0
@@ -89,27 +105,22 @@ parse :: proc(lexemes: []SymbolValue) -> bool { // d
 
   defer delete(stack)
   defer delete_soa(shifted)
-  
-  deref :: proc(ptr: rawptr, $T: typeid) -> T {
-    defer free(ptr)
-    return (^T)(ptr)^
-  }
 
-  peek :: proc(a: []SymbolValue) -> Symbol {
+  peek :: proc(a: []SymbolPair) -> Symbol {
     i := len(a) - 1
     if i >= 0 do return a[i].symbol
     return .EOF
   }
 
-  shift :: proc(stack: ^[dynamic]SymbolValue, shifted: ^#soa[dynamic]State, state: ^int, new_state: int, errors: ^int) {
-    val := pop_safe(stack) or_else SymbolValue{ .EOF, nil }
+  shift :: proc(stack: ^[dynamic]SymbolPair, shifted: ^#soa[dynamic]State, state: ^int, new_state: int, errors: ^int) {
+    val := pop_safe(stack) or_else SymbolPair{ .EOF, --- }
     if val.symbol == .ERR do errors^ += 1
     append_soa(shifted, State { val.symbol, val.value, state^ })
     state^ = new_state
   }
 
-  reduce :: proc(stack: ^[dynamic]SymbolValue, shifted: ^#soa[dynamic]State, state: ^int, errors: ^int, f: $T/proc(children: [$N]rawptr) -> SymbolValue) {
-    vals: [N]rawptr = ---
+  reduce :: proc(stack: ^[dynamic]SymbolPair, shifted: ^#soa[dynamic]State, state: ^int, errors: ^int, f: $T/proc(children: [$N]SymbolValue) -> SymbolPair) {
+    vals: [N]SymbolValue = ---
     when N > 0 {
       _, values, _ := soa_unzip(shifted^[:])
       copy_slice(vals[:], values[len(values) - N:])
@@ -120,7 +131,7 @@ parse :: proc(lexemes: []SymbolValue) -> bool { // d
   }
 
   when PARCELR_DEBUG {
-    dump :: proc(stack: [dynamic]SymbolValue, shifted: #soa[dynamic]State, state: int, size: int) {
+    dump :: proc(stack: [dynamic]SymbolPair, shifted: #soa[dynamic]State, state: int, size: int) {
       for s, i in shifted {
         if i >= len(shifted) - size {
           fmt.printf(" \u001b[46m\u001b[90m%i\u001b[30m %s", s.state, symbol_name(s.symbol))
@@ -140,8 +151,8 @@ parse :: proc(lexemes: []SymbolValue) -> bool { // d
   for {
     symbol := peek(stack[:])
     switch state {
-    //state
-      //l case ${state.index}:
+    //state state index
+      //l case ${index}:
       case 0: //d
         #partial switch symbol {
         //state.lookahead lah
@@ -158,7 +169,7 @@ parse :: proc(lexemes: []SymbolValue) -> bool { // d
             //l }
             //l return
             //symbol.2.type
-              //w  deref(shifted[0].value, ${type}),
+              //w  shifted[0].value.${symbol.2.enum},
             //e
             //w  true
           //e
@@ -172,19 +183,19 @@ parse :: proc(lexemes: []SymbolValue) -> bool { // d
             //l   fmt.println("    reduce ${reduce}")
             //l }
             //l reduce(&stack, &shifted, &state, &errors,
-            //l   proc (children: [${reduce.rhs.length}]rawptr) -> SymbolValue {
-            //l     ret: rawptr
+            //l   proc (children: [${reduce.rhs.length}]SymbolValue) -> SymbolPair {
+            //l     ret: SymbolValue
             //reduce.lhs.type
               //w ; this: ${type}
-              //reduce.rhs child idx
+              //reduce.rhs child index
                 //child.type
-                  //w ; _${idx} := deref(children[${idx}], ${type})
+                  //w ; _${index} := children[${index}].${child.enum}
                 //e
               //e
               //reduce.code
                 //l ${code}
               //e
-              //l   ret = new_clone(this)
+              //l   ret.${reduce.lhs.enum} = this
             //e
             //w ; return { .${reduce.lhs.enum}, ret }
             //l   })
@@ -197,7 +208,7 @@ parse :: proc(lexemes: []SymbolValue) -> bool { // d
 
     if errors > 0 {
       if state in HANDLES_ERRORS {
-        append(&stack, SymbolValue{ .ERR, nil })
+        append(&stack, SymbolPair{ .ERR, --- })
         continue
       }
 
@@ -212,12 +223,12 @@ parse :: proc(lexemes: []SymbolValue) -> bool { // d
     }
 
     if symbol != .ERR {
-      append(&stack, SymbolValue{ .ERR, nil })
+      append(&stack, SymbolPair{ .ERR, --- })
       continue
     }
 
     if len(shifted) == 0 do return false //d
-    //l if len(stack) == 0 do return
+    //l if len(shifted) == 0 do return
     //symbol.2.type
       //w  ---,
     //e
