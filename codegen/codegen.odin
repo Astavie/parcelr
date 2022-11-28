@@ -7,6 +7,7 @@ import "../grammar"
 
 Globals :: struct {
   state:  []StateVal,
+  rule:   []ReduceVal,
   symbol: []Symbol,
   lexeme: []Symbol,
   preamble: string,
@@ -21,6 +22,7 @@ make_single :: proc(e: $E) -> []E {
 make_globals :: proc(g: grammar.Grammar, table: grammar.Table) -> Globals {
   globals := Globals {
     make([]StateVal, len(table)),
+    make([]ReduceVal, len(g.rules) - 1),
     g.symbols[1:],
     make([]Symbol, len(g.lexemes) - 1),
     g.preamble,
@@ -28,6 +30,15 @@ make_globals :: proc(g: grammar.Grammar, table: grammar.Table) -> Globals {
 
   for lex, i in g.lexemes[1:] {
     globals.lexeme[i] = g.symbols[lex]
+  }
+
+  for rule, i in g.rules[1:] {
+    lhs := g.symbols[rule.lhs]
+    rhs := make([]Symbol, len(rule.rhs))
+    for k in 0..<len(rhs) {
+      rhs[k] = g.symbols[rule.rhs[k]]
+    }
+    globals.rule[i] = ReduceVal{ lhs, rhs, rule.code }
   }
 
   for i in 0..<len(table) {
@@ -55,13 +66,7 @@ make_globals :: proc(g: grammar.Grammar, table: grammar.Table) -> Globals {
           if v == grammar.Reduce(grammar.START) {
             lah[j].accept = {{}}
           } else {
-            rule := g.rules[v]
-            lhs := g.symbols[rule.lhs]
-            rhs := make([]Symbol, len(rule.rhs))
-            for k in 0..<len(rhs) {
-              rhs[k] = g.symbols[rule.rhs[k]]
-            }
-            lah[j].reduce = make_single(ReduceVal{ lhs, rhs, rule.code })
+            lah[j].reduce = make_single(globals.rule[v - 1])
           }
         case grammar.Shift:
           lah[j].shift = make_single(int(v))
@@ -78,20 +83,37 @@ StackElement :: struct {
   value: Value,
 }
 
+get_value :: proc(var: Var, stack: []StackElement) -> (value: Value, ok: bool) {
+  for i := len(stack) - 1; i >= 0; i -= 1 {
+    if var[0] != stack[i].var do continue
+    
+    value = stack[i].value
+    for s, i in var[1:] {
+      parent := value
+      defer if i > 0 do delete_value_slice(parent)
+      value = get_child(value, s) or_return
+    }
+    return value, true
+  }
+  return ---, false
+}
+
 eval :: proc(directives: []Directive, g: grammar.Grammar, table: grammar.Table) -> (string, bool) {
   globals := make_globals(g, table)
 
   stack := make([dynamic]StackElement)
-  append(&stack, StackElement{ "state",  globals.state  })
-  append(&stack, StackElement{ "symbol", globals.symbol })
-  append(&stack, StackElement{ "lexeme", globals.lexeme })
+  append(&stack, StackElement{ "state",    globals.state    })
+  append(&stack, StackElement{ "symbol",   globals.symbol   })
+  append(&stack, StackElement{ "lexeme",   globals.lexeme   })
   append(&stack, StackElement{ "preamble", globals.preamble })
+  append(&stack, StackElement{ "rule",     globals.rule     })
 
   defer {
     delete_value(stack[0].value)
     // delete_value(stack[1].value) // do note delete, directly taken from Grammar
     delete_value(stack[2].value)
     delete_value(stack[3].value)
+    delete_value(stack[4].value)
     delete(stack)
   }
 

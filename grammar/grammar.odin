@@ -56,9 +56,7 @@ parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
   defer delete(nonlexemes)
 
   // append ROOT, EOF, and ERR symbols
-  // the first symbol mentioned in the grammar file will be symbol 3
   rhs := make([]Symbol, 1)
-  rhs[0] = Symbol(3)
   append(&rules, RuleDefinition { ROOT, rhs, {} })
   append(&symbols, SymbolDefinition{ "ROOT", {}, {} }) // won't show up in templates but it's nice for debug information
   append(&symbols, SymbolDefinition{ "$", "EOF", {} })
@@ -149,36 +147,46 @@ parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
 
   preamble := parse_optional_code(&data)
 
-  for {
-    token := parse_token(&data)
-
-    if token == "" do break
+  {
+    copy := data
+    token := parse_token(&copy)
     if token == CODE_OPEN {
       delete_grammar({ rules[:], symbols[:], {}, {} })
       return ---, "'" + CODE_CLOSE + "' expected"
     }
+  }
+
+  for {
+    token := parse_token(&data)
+
+    if token == "" do break
     if token == EXPR_DONE || token == EXPR_ASSIGN || token == CODE_CLOSE {
       delete_grammar({ rules[:], symbols[:], {}, {} })
       return ---, "lhs or EOF expected"
     }
 
-    type := parse_optional_code(&data)
+    lhs := get_symbol(&symbols, token)
+    symbols[lhs].type = parse_optional_code(&data)
 
     {
       token := parse_token(&data)
+      if token == EXPR_DONE {
+        continue
+      }
       if token == CODE_OPEN {
         delete_grammar({ rules[:], symbols[:], {}, {} })
-        return ---, "'" + EXPR_ASSIGN + "' expected"
+        return ---, "'" + CODE_CLOSE + "' expected"
       }
       if token != EXPR_ASSIGN {
         delete_grammar({ rules[:], symbols[:], {}, {} })
-        return ---, "'" + EXPR_ASSIGN + "' expected"
+        return ---, "'" + EXPR_ASSIGN + "' or '" + EXPR_DONE + "' expected"
       }
     }
-    
-    lhs := get_symbol(&symbols, token)
+
+    if len(rules) == 1 {
+      rules[0].rhs[0] = lhs;
+    }
     nonlexemes[lhs] = {}
-    symbols[lhs].type = type
 
     outer: for {
       rhs := make([dynamic]Symbol)

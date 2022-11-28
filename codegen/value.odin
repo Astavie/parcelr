@@ -124,7 +124,7 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
 delete_value :: proc(val: Value) {
   #partial switch v in val {
     case LookaheadVal:
-      delete_value(v.reduce)
+      delete_value_slice(v.reduce)
       delete(v.shift)
       delete(v.symbol)
     case ReduceVal:
@@ -242,21 +242,6 @@ as_slice :: proc(val: Value, force: bool) -> (ValueIterator, bool) {
     case:
       return { 1, 0, val }, force
   }
-}
-
-get_value :: proc(var: Var, stack: []StackElement) -> (value: Value, ok: bool) {
-  for i := len(stack) - 1; i >= 0; i -= 1 {
-    if var[0] != stack[i].var do continue
-    
-    value = stack[i].value
-    for s, i in var[1:] {
-      parent := value
-      defer if i > 0 do delete_value_slice(parent)
-      value = get_child(value, s) or_return
-    }
-    return value, true
-  }
-  return ---, false
 }
 
 print_value :: proc(sb: ^strings.Builder, val: Value) -> bool {

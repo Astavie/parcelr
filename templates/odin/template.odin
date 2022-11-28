@@ -83,12 +83,12 @@ when PARCELR_DEBUG {
 
 parse :: proc(lexemes: []SymbolPair) -> bool { // d
 //l parse :: proc(lexemes: []SymbolPair) -> (
-//symbol.2.type
+//rule.0.lhs.type
   //w ${type},
 //e
 //w bool) {
   stack := slice.clone_to_dynamic(lexemes)
-  
+
   n := len(stack)/2
   for i in 0..<n {
     a, b := i, len(stack)-i-1
@@ -168,8 +168,8 @@ parse :: proc(lexemes: []SymbolPair) -> bool { // d
             //l   fmt.println()
             //l }
             //l return
-            //symbol.2.type
-              //w  shifted[0].value.${symbol.2.enum},
+            //rule.0.lhs.type
+              //w  shifted[0].value.${rule.0.lhs.enum},
             //e
             //w  true
           //e
@@ -214,7 +214,7 @@ parse :: proc(lexemes: []SymbolPair) -> bool { // d
 
       if len(stack) == 0 do return false //d
       //l if len(stack) == 0 do return
-      //symbol.2.type
+      //rule.0.lhs.type
         //w  ---,
       //e
       //w  false
@@ -229,7 +229,7 @@ parse :: proc(lexemes: []SymbolPair) -> bool { // d
 
     if len(shifted) == 0 do return false //d
     //l if len(shifted) == 0 do return
-    //symbol.2.type
+    //rule.0.lhs.type
       //w  ---,
     //e
     //w  false

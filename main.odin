@@ -82,28 +82,30 @@ _main :: proc() {
   defer grammar.delete_table(table)
   grammar.print_table(g, table)
   fmt.println()
- 
-  template, ok3 := os.read_entire_file("templates/template.odin")
-  if !ok3 {
-    fmt.println("could not parse template: unknown file")
-    return
-  }
-  defer delete(template)
 
-  dirs, ok4 := codegen.parse_template(transmute(string)template, "//")
-  if !ok4 {
-    fmt.println("could not parse template: mismatched braces")
-    return
-  }
-  defer codegen.delete_directives(dirs)
+  for path, index in ([?]string{"templates/c/template.h", "templates/c/template.c"}) {
+    template, ok3 := os.read_entire_file(path)
+    if !ok3 {
+      fmt.println("could not parse template: unknown file")
+      return
+    }
+    defer delete(template)
 
-  e, ok5 := codegen.eval(dirs, g, table)
-  if !ok5 {
-    fmt.println("could not evaluate template")
-    return
-  }
-  defer delete(e)
+    dirs, ok4 := codegen.parse_template(transmute(string)template, "//")
+    if !ok4 {
+      fmt.println("could not parse template: mismatched braces")
+      return
+    }
+    defer codegen.delete_directives(dirs)
 
-  os.write_entire_file("out", transmute([]byte)e)
+    e, ok5 := codegen.eval(dirs, g, table)
+    if !ok5 {
+      fmt.println("could not evaluate template")
+      return
+    }
+    defer delete(e)
+
+    os.write_entire_file(fmt.tprintf("out%i", index), transmute([]byte)e)
+  }
   fmt.println("SUCCESS")
 }
