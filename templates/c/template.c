@@ -57,6 +57,7 @@ bool parser_parse(struct stack_s symbols) { //d
             //l POP_CHILD(${type}, 0);
             //l *value = _0;
           //e
+          //l   stack_destroy(shifted);
           //l   return true;
           //l }
         //e
@@ -108,7 +109,10 @@ bool parser_parse(struct stack_s symbols) { //d
         //e
       //e
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       //l }
     //e

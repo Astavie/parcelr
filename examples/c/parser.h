@@ -43,7 +43,7 @@ static void *duplicate(void *ptr, size_t size) {
 
 #define dup(value) duplicate(&value, sizeof(value))
 
-typedef enum { SYMBOL_EOF, SYMBOL_ERR, SYMBOL_number, SYMBOL_string, SYMBOL_value, SYMBOL_object, SYMBOL_array, SYMBOL__8, SYMBOL__9, SYMBOL__10, SYMBOL__11, SYMBOL__12, SYMBOL_members, SYMBOL_member, SYMBOL__15, SYMBOL__16, SYMBOL__17, SYMBOL__18, SYMBOL_values } parser_symbol;
+typedef enum { SYMBOL_EOF, SYMBOL_ERR, SYMBOL_number, SYMBOL_string, SYMBOL_value, SYMBOL_object, SYMBOL_array, SYMBOL_TRUE, SYMBOL_FALSE, SYMBOL_NULL, SYMBOL_OPEN_BRACE, SYMBOL_CLOSE_BRACE, SYMBOL_members, SYMBOL_member, SYMBOL_COMMA, SYMBOL_COLON, SYMBOL_OPEN_BRACKET, SYMBOL_CLOSE_BRACKET, SYMBOL_values } parser_symbol;
 
 const char *parser_symbol_name(parser_symbol symbol);
       bool  parser_parse      (struct stack_s lexemes, json_value *value);

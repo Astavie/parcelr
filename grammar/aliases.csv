@@ -1,0 +1,9 @@
+"true",TRUE
+"false",FALSE
+"null",NULL
+"{",OPEN_BRACE
+"}",CLOSE_BRACE
+",",COMMA
+":",COLON
+"[",OPEN_BRACKET
+"]",CLOSE_BRACKET

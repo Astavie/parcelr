@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
     while (i > 0) {
       i--;
 
-      #define SYM(symbol) parser_symbol sym = SYMBOL_##symbol; stack_push(values, sym);
+      #define SYM(symbol) parser_symbol sym = SYMBOL_##symbol; stack_push(values, sym)
       #define VAL(symbol) stack_push(values, symbol); SYM(symbol)
 
       while (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\v' || text[i] == '\f' || text[i] == '\r') {
@@ -168,5 +168,6 @@ int main(int argc, char **argv) {
  
   json_value value = {0};
   parser_parse(values, &value);
+  stack_destroy(values);
   print(value, 0);
 }

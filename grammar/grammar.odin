@@ -2,6 +2,7 @@ package grammar
 
 import "core:strings"
 import "core:fmt"
+import "core:encoding/csv"
 
 Symbol :: distinct int
 Lexeme :: distinct u8
@@ -35,6 +36,17 @@ ERR  :: Lexeme(1)
 void :: struct{}
 
 Error :: distinct string
+
+aliases : map[string]string
+
+@(init, private)
+_get_aliases :: proc() {
+  table, _ := csv.read_all_from_string(#load("aliases.csv"))
+  aliases = make(map[string]string, len(aliases))
+  for row in table {
+    aliases[row[0]] = row[1]
+  }
+}
 
 delete_grammar :: proc(g: Grammar) {
   for rule in g.rules {
@@ -74,7 +86,11 @@ parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
     enum_name : string
     if token[0] == '"' && token[len(token) - 1] == '"' {
       name = strings.clone(token[1:len(token) - 1])
-      enum_name = fmt.aprintf("_%i", len(symbols))
+      if alias, ok := aliases[name]; ok {
+        enum_name = strings.clone(alias)
+      } else {
+        enum_name = fmt.aprintf("_%i", len(symbols))
+      }
     } else {
       name = strings.clone(token)
       enum_name = strings.clone(token)

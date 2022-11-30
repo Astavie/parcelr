@@ -9,17 +9,17 @@ const char *parser_symbol_name(parser_symbol symbol) {
     case SYMBOL_value: return "value";
     case SYMBOL_object: return "object";
     case SYMBOL_array: return "array";
-    case SYMBOL__8: return "true";
-    case SYMBOL__9: return "false";
-    case SYMBOL__10: return "null";
-    case SYMBOL__11: return "{";
-    case SYMBOL__12: return "}";
+    case SYMBOL_TRUE: return "true";
+    case SYMBOL_FALSE: return "false";
+    case SYMBOL_NULL: return "null";
+    case SYMBOL_OPEN_BRACE: return "{";
+    case SYMBOL_CLOSE_BRACE: return "}";
     case SYMBOL_members: return "members";
     case SYMBOL_member: return "member";
-    case SYMBOL__15: return ",";
-    case SYMBOL__16: return ":";
-    case SYMBOL__17: return "[";
-    case SYMBOL__18: return "]";
+    case SYMBOL_COMMA: return ",";
+    case SYMBOL_COLON: return ":";
+    case SYMBOL_OPEN_BRACKET: return "[";
+    case SYMBOL_CLOSE_BRACKET: return "]";
     case SYMBOL_values: return "values";
   }
   return "";
@@ -79,33 +79,36 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             SHIFT_PUSH(5, double);
             continue;
           }
-          case SYMBOL__8:
+          case SYMBOL_TRUE:
           {
             SHIFT(6);
             continue;
           }
-          case SYMBOL__9:
+          case SYMBOL_FALSE:
           {
             SHIFT(7);
             continue;
           }
-          case SYMBOL__10:
+          case SYMBOL_NULL:
           {
             SHIFT(8);
             continue;
           }
-          case SYMBOL__17:
+          case SYMBOL_OPEN_BRACKET:
           {
             SHIFT(9);
             continue;
           }
-          case SYMBOL__11:
+          case SYMBOL_OPEN_BRACE:
           {
             SHIFT(10);
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 1:
@@ -115,19 +118,23 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
           {
             POP_CHILD(json_value, 0);
             *value = _0;
+            stack_destroy(shifted);
             return true;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 2:
       {
         switch (next) {
           case SYMBOL_EOF:
-          case SYMBOL__15:
-          case SYMBOL__18:
-          case SYMBOL__12:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
+          case SYMBOL_CLOSE_BRACE:
           {
             state = POP_CHILD(json_object, 0);
             json_value this; this.type = JSON_OBJECT; this.data.object = _0;
@@ -136,16 +143,19 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 3:
       {
         switch (next) {
           case SYMBOL_EOF:
-          case SYMBOL__15:
-          case SYMBOL__18:
-          case SYMBOL__12:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
+          case SYMBOL_CLOSE_BRACE:
           {
             state = POP_CHILD(json_array, 0);
             json_value this; this.type = JSON_ARRAY;  this.data.array  = _0;
@@ -154,16 +164,19 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 4:
       {
         switch (next) {
           case SYMBOL_EOF:
-          case SYMBOL__15:
-          case SYMBOL__18:
-          case SYMBOL__12:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
+          case SYMBOL_CLOSE_BRACE:
           {
             state = POP_CHILD(json_string, 0);
             json_value this; this.type = JSON_STRING; this.data.string = _0;
@@ -172,16 +185,19 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 5:
       {
         switch (next) {
           case SYMBOL_EOF:
-          case SYMBOL__15:
-          case SYMBOL__18:
-          case SYMBOL__12:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
+          case SYMBOL_CLOSE_BRACE:
           {
             state = POP_CHILD(double, 0);
             json_value this; this.type = JSON_NUMBER; this.data.number = _0;
@@ -190,16 +206,19 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 6:
       {
         switch (next) {
           case SYMBOL_EOF:
-          case SYMBOL__15:
-          case SYMBOL__18:
-          case SYMBOL__12:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
+          case SYMBOL_CLOSE_BRACE:
           {
             state = POP();
             json_value this; this.type = JSON_BOOL; this.data.boolean = true;
@@ -208,16 +227,19 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 7:
       {
         switch (next) {
           case SYMBOL_EOF:
-          case SYMBOL__15:
-          case SYMBOL__18:
-          case SYMBOL__12:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
+          case SYMBOL_CLOSE_BRACE:
           {
             state = POP();
             json_value this; this.type = JSON_BOOL; this.data.boolean = false;
@@ -226,16 +248,19 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 8:
       {
         switch (next) {
           case SYMBOL_EOF:
-          case SYMBOL__15:
-          case SYMBOL__18:
-          case SYMBOL__12:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
+          case SYMBOL_CLOSE_BRACE:
           {
             state = POP();
             json_value this; this.type = JSON_NULL;
@@ -244,13 +269,16 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 9:
       {
         switch (next) {
-          case SYMBOL__18:
+          case SYMBOL_CLOSE_BRACKET:
           {
             SHIFT(11);
             continue;
@@ -285,39 +313,42 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             SHIFT_PUSH(5, double);
             continue;
           }
-          case SYMBOL__8:
+          case SYMBOL_TRUE:
           {
             SHIFT(6);
             continue;
           }
-          case SYMBOL__9:
+          case SYMBOL_FALSE:
           {
             SHIFT(7);
             continue;
           }
-          case SYMBOL__10:
+          case SYMBOL_NULL:
           {
             SHIFT(8);
             continue;
           }
-          case SYMBOL__17:
+          case SYMBOL_OPEN_BRACKET:
           {
             SHIFT(9);
             continue;
           }
-          case SYMBOL__11:
+          case SYMBOL_OPEN_BRACE:
           {
             SHIFT(10);
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 10:
       {
         switch (next) {
-          case SYMBOL__12:
+          case SYMBOL_CLOSE_BRACE:
           {
             SHIFT(14);
             continue;
@@ -338,16 +369,19 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 11:
       {
         switch (next) {
           case SYMBOL_EOF:
-          case SYMBOL__15:
-          case SYMBOL__18:
-          case SYMBOL__12:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
+          case SYMBOL_CLOSE_BRACE:
           {
             POP(); state = POP();
             json_array this; this = (json_array){0};
@@ -356,31 +390,37 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 12:
       {
         switch (next) {
-          case SYMBOL__18:
+          case SYMBOL_CLOSE_BRACKET:
           {
             SHIFT(18);
             continue;
           }
-          case SYMBOL__15:
+          case SYMBOL_COMMA:
           {
             SHIFT(19);
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 13:
       {
         switch (next) {
-          case SYMBOL__15:
-          case SYMBOL__18:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
           {
             state = POP_CHILD(json_value, 0);
             json_array this; this = array_make(json_value, 16); array_push(this, _0);
@@ -389,16 +429,19 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 14:
       {
         switch (next) {
           case SYMBOL_EOF:
-          case SYMBOL__15:
-          case SYMBOL__18:
-          case SYMBOL__12:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
+          case SYMBOL_CLOSE_BRACE:
           {
             POP(); state = POP();
             json_object this; this = (json_object){0};
@@ -407,31 +450,37 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 15:
       {
         switch (next) {
-          case SYMBOL__12:
+          case SYMBOL_CLOSE_BRACE:
           {
             SHIFT(20);
             continue;
           }
-          case SYMBOL__15:
+          case SYMBOL_COMMA:
           {
             SHIFT(21);
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 16:
       {
         switch (next) {
-          case SYMBOL__12:
-          case SYMBOL__15:
+          case SYMBOL_CLOSE_BRACE:
+          case SYMBOL_COMMA:
           {
             state = POP_CHILD(json_entry, 0);
             json_object this; hashmap_create(16, &this); hashmap_put(&this, _0.key.string, _0.key.length, dup(_0.value));
@@ -440,28 +489,34 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 17:
       {
         switch (next) {
-          case SYMBOL__16:
+          case SYMBOL_COLON:
           {
             SHIFT(22);
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 18:
       {
         switch (next) {
           case SYMBOL_EOF:
-          case SYMBOL__15:
-          case SYMBOL__18:
-          case SYMBOL__12:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
+          case SYMBOL_CLOSE_BRACE:
           {
             POP(); POP_CHILD(json_array, 1); state = POP();
             json_array this; this = _1;
@@ -470,7 +525,10 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 19:
@@ -501,42 +559,45 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             SHIFT_PUSH(5, double);
             continue;
           }
-          case SYMBOL__8:
+          case SYMBOL_TRUE:
           {
             SHIFT(6);
             continue;
           }
-          case SYMBOL__9:
+          case SYMBOL_FALSE:
           {
             SHIFT(7);
             continue;
           }
-          case SYMBOL__10:
+          case SYMBOL_NULL:
           {
             SHIFT(8);
             continue;
           }
-          case SYMBOL__17:
+          case SYMBOL_OPEN_BRACKET:
           {
             SHIFT(9);
             continue;
           }
-          case SYMBOL__11:
+          case SYMBOL_OPEN_BRACE:
           {
             SHIFT(10);
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 20:
       {
         switch (next) {
           case SYMBOL_EOF:
-          case SYMBOL__15:
-          case SYMBOL__18:
-          case SYMBOL__12:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
+          case SYMBOL_CLOSE_BRACE:
           {
             POP(); POP_CHILD(json_object, 1); state = POP();
             json_object this; this = _1;
@@ -545,7 +606,10 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 21:
@@ -562,7 +626,10 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 22:
@@ -593,40 +660,43 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             SHIFT_PUSH(5, double);
             continue;
           }
-          case SYMBOL__8:
+          case SYMBOL_TRUE:
           {
             SHIFT(6);
             continue;
           }
-          case SYMBOL__9:
+          case SYMBOL_FALSE:
           {
             SHIFT(7);
             continue;
           }
-          case SYMBOL__10:
+          case SYMBOL_NULL:
           {
             SHIFT(8);
             continue;
           }
-          case SYMBOL__17:
+          case SYMBOL_OPEN_BRACKET:
           {
             SHIFT(9);
             continue;
           }
-          case SYMBOL__11:
+          case SYMBOL_OPEN_BRACE:
           {
             SHIFT(10);
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 23:
       {
         switch (next) {
-          case SYMBOL__15:
-          case SYMBOL__18:
+          case SYMBOL_COMMA:
+          case SYMBOL_CLOSE_BRACKET:
           {
             POP_CHILD(json_value, 2); POP(); state = POP_CHILD(json_array, 0);
             json_array this; this = _0; array_push(this, _2);
@@ -635,14 +705,17 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 24:
       {
         switch (next) {
-          case SYMBOL__12:
-          case SYMBOL__15:
+          case SYMBOL_CLOSE_BRACE:
+          case SYMBOL_COMMA:
           {
             POP_CHILD(json_entry, 2); POP(); state = POP_CHILD(json_object, 0);
             json_object this; this = _0; hashmap_put(&this, _2.key.string, _2.key.length, dup(_2.value));
@@ -651,14 +724,17 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
       case 25:
       {
         switch (next) {
-          case SYMBOL__12:
-          case SYMBOL__15:
+          case SYMBOL_CLOSE_BRACE:
+          case SYMBOL_COMMA:
           {
             POP_CHILD(json_value, 2); POP(); state = POP_CHILD(json_string, 0);
             json_entry this; this = (json_entry){ _0, _2 };
@@ -667,7 +743,10 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
             continue;
           }
           default:
+          {
+            stack_destroy(shifted);
             return false;
+          }
         }
       }
     }
