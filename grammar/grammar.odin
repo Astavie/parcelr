@@ -20,6 +20,7 @@ SymbolDefinition :: struct {
   name: string,
   enum_name: string,
   type: string,
+  lexeme: bool,
 }
 
 Grammar :: struct {
@@ -64,17 +65,13 @@ delete_grammar :: proc(g: Grammar) {
 parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
   rules      := make([dynamic]RuleDefinition)
   symbols    := make([dynamic]SymbolDefinition)
-  nonlexemes := make(map[Symbol]void)
-  defer delete(nonlexemes)
 
   // append ROOT, EOF, and ERR symbols
   rhs := make([]Symbol, 1)
   append(&rules, RuleDefinition { ROOT, rhs, {} })
-  append(&symbols, SymbolDefinition{ "ROOT", {}, {} }) // won't show up in templates but it's nice for debug information
-  append(&symbols, SymbolDefinition{ "$", "EOF", {} })
-  append(&symbols, SymbolDefinition{ "error", "ERR", {} })
-
-  nonlexemes[ROOT] = {}
+  append(&symbols, SymbolDefinition{ "ROOT", {}, {}, false }) // won't show up in templates but it's nice for debug information
+  append(&symbols, SymbolDefinition{ "$", "EOF", {}, true })
+  append(&symbols, SymbolDefinition{ "error", "ERR", {}, true })
 
   EXPR_ASSIGN :: "->"
   EXPR_DONE   :: ";"
@@ -102,7 +99,7 @@ parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
         return Symbol(idx)
       }
     }
-    append(symbols, SymbolDefinition{ name, enum_name, {} })
+    append(symbols, SymbolDefinition{ name, enum_name, {}, true })
     return Symbol(len(symbols) - 1)
   }
 
@@ -202,7 +199,7 @@ parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
     if len(rules) == 1 {
       rules[0].rhs[0] = lhs;
     }
-    nonlexemes[lhs] = {}
+    symbols[lhs].lexeme = false;
 
     outer: for {
       rhs := make([dynamic]Symbol)
@@ -245,20 +242,17 @@ parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
     }
   }
 
-  lexemes := make([]Symbol, len(symbols) - len(nonlexemes))
-  i := 0
-  for idx in 0..<len(symbols) {
-    symbol := Symbol(idx)
-    if !(symbol in nonlexemes) {
-      lexemes[i] = symbol
-      i += 1
+  lexemes := make([dynamic]Symbol)
+  for def, idx in symbols {
+    if def.lexeme {
+      append(&lexemes, Symbol(idx))
     }
   }
 
   return {
     rules[:],
     symbols[:],
-    lexemes,
+    lexemes[:],
     preamble,
   }, {}
 }

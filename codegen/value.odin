@@ -67,6 +67,8 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
           return v.enum_name, true
         case "type":
           return v.type, true
+        case "lexeme":
+          return make_single(s) if v.lexeme else []string{}, true
       }
     case []int:
       // get element count

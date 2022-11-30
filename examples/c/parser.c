@@ -483,7 +483,7 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
           case SYMBOL_COMMA:
           {
             state = POP_CHILD(json_entry, 0);
-            json_object this; hashmap_create(16, &this); hashmap_put(&this, _0.key.string, _0.key.length, dup(_0.value));
+            json_object this; hashmap_create(16, &this); hashmap_put(&this, _0.key.string, _0.key.length, alloc_clone(_0.value));
             stack_push(symbols, this);
             REDUCE(members);
             continue;
@@ -718,7 +718,7 @@ bool parser_parse(struct stack_s symbols, json_value *value) {
           case SYMBOL_COMMA:
           {
             POP_CHILD(json_entry, 2); POP(); state = POP_CHILD(json_object, 0);
-            json_object this; this = _0; hashmap_put(&this, _2.key.string, _2.key.length, dup(_2.value));
+            json_object this; this = _0; hashmap_put(&this, _2.key.string, _2.key.length, alloc_clone(_2.value));
             stack_push(symbols, this);
             REDUCE(members);
             continue;

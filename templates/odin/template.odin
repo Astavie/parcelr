@@ -61,7 +61,7 @@ when PARCELR_DEBUG {
 
         for w in strs {
           switch w {
-          //lexeme
+          //symbol.lexeme
             //l case "${lexeme.name}": append(&symbols, SymbolPair{ .${lexeme.enum}, --- })
           //e
             case: append(&symbols, SymbolPair{ .ERR, --- })

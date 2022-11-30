@@ -31,13 +31,11 @@ typedef struct {
   json_value value;
 } json_entry;
 
-static void *duplicate(void *ptr, size_t size) {
-  void *dup = malloc(size);
-  memcpy(dup, ptr, size);
+static json_value *alloc_clone(json_value value) {
+  json_value *dup = (json_value*)malloc(sizeof(json_value));
+  memcpy(dup, &value, sizeof(json_value));
   return dup;
 }
-
-#define dup(value) duplicate(&value, sizeof(value))
 
 //
 
@@ -58,8 +56,8 @@ object // json_object //
  -> "{" members "}"    // this = _1; //
 ;
 members // json_object //
- ->             member // hashmap_create(16, &this); hashmap_put(&this, _0.key.string, _0.key.length, dup(_0.value)); //
- -> members "," member // this = _0; hashmap_put(&this, _2.key.string, _2.key.length, dup(_2.value)); //
+ ->             member // hashmap_create(16, &this); hashmap_put(&this, _0.key.string, _0.key.length, alloc_clone(_0.value)); //
+ -> members "," member // this = _0; hashmap_put(&this, _2.key.string, _2.key.length, alloc_clone(_2.value)); //
 ;
 member // json_entry //
  -> string ":" value   // this = (json_entry){ _0, _2 }; //

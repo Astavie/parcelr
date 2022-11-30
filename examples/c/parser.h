@@ -35,13 +35,11 @@ typedef struct {
   json_value value;
 } json_entry;
 
-static void *duplicate(void *ptr, size_t size) {
-  void *dup = malloc(size);
-  memcpy(dup, ptr, size);
+static json_value *alloc_clone(json_value value) {
+  json_value *dup = (json_value*)malloc(sizeof(json_value));
+  memcpy(dup, &value, sizeof(json_value));
   return dup;
 }
-
-#define dup(value) duplicate(&value, sizeof(value))
 
 typedef enum { SYMBOL_EOF, SYMBOL_ERR, SYMBOL_number, SYMBOL_string, SYMBOL_value, SYMBOL_object, SYMBOL_array, SYMBOL_TRUE, SYMBOL_FALSE, SYMBOL_NULL, SYMBOL_OPEN_BRACE, SYMBOL_CLOSE_BRACE, SYMBOL_members, SYMBOL_member, SYMBOL_COMMA, SYMBOL_COLON, SYMBOL_OPEN_BRACKET, SYMBOL_CLOSE_BRACKET, SYMBOL_values } parser_symbol;
 

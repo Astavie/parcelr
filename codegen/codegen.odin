@@ -9,7 +9,6 @@ Globals :: struct {
   state:  []StateVal,
   rule:   []ReduceVal,
   symbol: []Symbol,
-  lexeme: []Symbol,
   preamble: string,
 }
 
@@ -24,12 +23,7 @@ make_globals :: proc(g: grammar.Grammar, table: grammar.Table) -> Globals {
     make([]StateVal, len(table)),
     make([]ReduceVal, len(g.rules) - 1),
     g.symbols[1:],
-    make([]Symbol, len(g.lexemes) - 1),
     g.preamble,
-  }
-
-  for lex, i in g.lexemes[1:] {
-    globals.lexeme[i] = g.symbols[lex]
   }
 
   for rule, i in g.rules[1:] {
@@ -104,7 +98,6 @@ eval :: proc(directives: []Directive, g: grammar.Grammar, table: grammar.Table) 
   stack := make([dynamic]StackElement)
   append(&stack, StackElement{ "state",    globals.state    })
   append(&stack, StackElement{ "symbol",   globals.symbol   })
-  append(&stack, StackElement{ "lexeme",   globals.lexeme   })
   append(&stack, StackElement{ "preamble", globals.preamble })
   append(&stack, StackElement{ "rule",     globals.rule     })
 
@@ -113,7 +106,6 @@ eval :: proc(directives: []Directive, g: grammar.Grammar, table: grammar.Table) 
     // delete_value(stack[1].value) // do note delete, directly taken from Grammar
     delete_value(stack[2].value)
     delete_value(stack[3].value)
-    delete_value(stack[4].value)
     delete(stack)
   }
 
