@@ -102,39 +102,39 @@ int main(int argc, char **argv) {
       }
 
       if (prefix("true", text, &i)) {
-        SYM(_8);
+        SYM(TRUE);
         continue;
       }
       if (prefix("false", text, &i)) {
-        SYM(_9);
+        SYM(FALSE);
         continue;
       }
       if (prefix("null", text, &i)) {
-        SYM(_10);
+        SYM(NULL);
         continue;
       }
       if (text[i] == '{') {
-        SYM(_11);
+        SYM(OPEN_BRACE);
         continue;
       }
       if (text[i] == '}') {
-        SYM(_12);
+        SYM(CLOSE_BRACE);
         continue;
       }
       if (text[i] == ',') {
-        SYM(_15);
+        SYM(COMMA);
         continue;
       }
       if (text[i] == ':') {
-        SYM(_16);
+        SYM(COLON);
         continue;
       }
       if (text[i] == '[') {
-        SYM(_17);
+        SYM(OPEN_BRACKET);
         continue;
       }
       if (text[i] == ']') {
-        SYM(_18);
+        SYM(CLOSE_BRACKET);
         continue;
       }
       if (text[i] == '"') {
