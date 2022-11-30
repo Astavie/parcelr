@@ -31,6 +31,14 @@ typedef struct {
   json_value value;
 } json_entry;
 
+static void *duplicate(void *ptr, size_t size) {
+  void *dup = malloc(size);
+  memcpy(dup, ptr, size);
+  return dup;
+}
+
+#define dup(value) duplicate(&value, sizeof(value))
+
 //
 
 number // double // ;
@@ -38,7 +46,7 @@ string // json_string // ;
 
 value // json_value //
  -> object             // this.type = JSON_OBJECT; this.data.object = _0; //
- -> array              // this.type = JSON_ARRAY; this.data.array = _0; //
+ -> array              // this.type = JSON_ARRAY;  this.data.array  = _0; //
  -> string             // this.type = JSON_STRING; this.data.string = _0; //
  -> number             // this.type = JSON_NUMBER; this.data.number = _0; //
  -> "true"             // this.type = JSON_BOOL; this.data.boolean = true; //

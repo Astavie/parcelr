@@ -161,7 +161,8 @@ _eval :: proc(sb: ^strings.Builder, stack: ^[dynamic]StackElement, directives: ^
           fmt.sbprint(sb, v.before)
         }
 
-        if v.separator && last do continue
+        if v.separator == SeparatorRule.BETWEEN && last do continue
+        if v.separator == SeparatorRule.END && !last do continue
 
         fmt.sbprint(sb, v.after)
         for varlit in v.vars {
@@ -179,10 +180,12 @@ _eval :: proc(sb: ^strings.Builder, stack: ^[dynamic]StackElement, directives: ^
         for val, idx in iterate_values(&it) {
           append(stack, StackElement{ v.name, val })
           if v.index != {} do append(stack, StackElement{ v.index, idx })
+          if v.reversed_index != {} do append(stack, StackElement{ v.reversed_index, it.len - idx - 1 })
           
           dirs := directives^;
           _eval(sb, stack, &dirs, idx == it.len - 1) or_return
           
+          if v.reversed_index != {} do pop(stack)
           if v.index != {} do pop(stack)
           pop(stack)
         }

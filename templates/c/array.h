@@ -21,10 +21,7 @@ static void array_destroy(struct array_s array) {
 
 static void _array_resize(struct array_s *array, size_t size, unsigned length) {
   char *newdata = (char*)malloc(size * length);
-  
-  if (length < array->length) array->length = length;
-  size_t amount = array->length * size;
-  memcpy(newdata, array->data, amount);
+  memcpy(newdata, array->data, size * length);
 
   free(array->data);
   array->data = newdata;
@@ -41,7 +38,4 @@ static void _array_push(struct array_s *array, size_t size, void *data) {
   array->length++;
 }
 
-#define array_pop(array, type) array_elem(array, type, --array.length)
-#define array_peek(array, type) array_elem(array, type, array.length - 1)
 #define array_elem(array, type, index) (((type*)(array.data))[index])
-

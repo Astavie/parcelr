@@ -1,5 +1,8 @@
 #pragma once
+
 #include <stdbool.h>
+
+#include "stack.h"
 
 //preamble
 //l ${preamble}
@@ -13,14 +16,9 @@ typedef enum { SYMBOL_EOF, SYMBOL_ERR } parser_symbol; //d
 //e
 //w  } parser_symbol;
 
-typedef struct {
-  parser_symbol symbol;
-  void         *value;
-} parser_value;
-
 const char *parser_symbol_name(parser_symbol symbol);
-      bool  parser_parse      (parser_value *lexemes); //d
-//l       bool  parser_parse      (parser_value *lexemes
+      bool  parser_parse      (struct stack_s lexemes); //d
+//l       bool  parser_parse      (struct stack_s lexemes
 //rule.0.lhs.type
   //w , ${type} *value
 //e

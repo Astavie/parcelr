@@ -68,11 +68,6 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
         case "type":
           return v.type, true
       }
-    case []void:
-      switch s {
-        case "length":
-          return len(v), true
-      }
     case []int:
       // get element count
       if s[0] == '"' && s[len(s) - 1] == '"' {
@@ -92,6 +87,13 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
       switch s {
         case "length":
           return it.len, true
+        case "reversed":
+          reversed := make([]Value, it.len)
+          defer delete(reversed)
+          for elem, idx in iterate_values(&it) {
+            reversed[it.len - idx - 1] = elem
+          }
+          return slice_to_value(reversed), true
         case:
           // get slice index
           if i, ok := strconv.parse_int(s, 10); ok {

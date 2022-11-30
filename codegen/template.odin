@@ -8,6 +8,7 @@ Start :: struct {
   var: Var,
   name: string,
   index: string,
+  reversed_index: string,
 }
 
 WriteEntry :: struct {
@@ -15,12 +16,14 @@ WriteEntry :: struct {
   lit: string,
 }
 
+SeparatorRule :: enum { NONE, BETWEEN, END }
+
 Write :: struct {
   before: string,
   after:  string,
   vars: []WriteEntry,
   newline: bool,
-  separator: bool,
+  separator: SeparatorRule,
 }
 
 End :: struct{}
@@ -52,7 +55,7 @@ parse_template :: proc(template, prefix: string) -> ([]Directive, bool) {
   for line in lines {
     i := strings.index(line, prefix)
     if i == -1 {
-      append(&directives, Write{ line, {}, {}, true, false })
+      append(&directives, Write{ line, {}, {}, true, {} })
       continue
     }
 
@@ -66,12 +69,19 @@ parse_template :: proc(template, prefix: string) -> ([]Directive, bool) {
     switch word {
       case "":
         continue
-      case "l", "w", "s":
+      case "l", "w", "s", "f":
+        rule: SeparatorRule
+        if word == "s" {
+          rule = SeparatorRule.BETWEEN;
+        } else if word == "f" {
+          rule = SeparatorRule.END;
+        }
+
         // write
-        next := directive[2:]
+        next := directive[2:] if len(directive) > 1 else {}
         index := strings.index(next, "${")
         if index == -1 {
-          append(&directives, Write{ literal, next, {}, word == "l", word == "s" })
+          append(&directives, Write{ literal, next, {}, word == "l", rule })
           continue
         }
 
@@ -99,10 +109,10 @@ parse_template :: proc(template, prefix: string) -> ([]Directive, bool) {
           append(&entries, WriteEntry{ var, lit })
         }
 
-        append(&directives, Write{ literal, first, entries[:], word == "l", word == "s" })
+        append(&directives, Write{ literal, first, entries[:], word == "l", rule })
       case "e":
         // end
-        if strings.trim_space(literal) != {} do append(&directives, Write{ literal, {}, {}, true, false })
+        if strings.trim_space(literal) != {} do append(&directives, Write{ literal, {}, {}, true, {} })
         append(&directives, End{})
       case "d":
         // delete
@@ -125,8 +135,15 @@ parse_template :: proc(template, prefix: string) -> ([]Directive, bool) {
           if (space != -1) do index = index[:space]
         }
 
-        if strings.trim_space(literal) != {} do append(&directives, Write{ literal, {}, {}, true, false })
-        append(&directives, Start{ var, name, index })
+        reversed_index := ""
+        if len(directive) > space + 1 + len(name) + 1 + len(index) {
+          reversed_index = directive[space + 1 + len(name) + 1 + len(index) + 1:]
+          space := strings.index_byte(reversed_index, ' ')
+          if (space != -1) do reversed_index = reversed_index[:space]
+        }
+
+        if strings.trim_space(literal) != {} do append(&directives, Write{ literal, {}, {}, true, {} })
+        append(&directives, Start{ var, name, index, reversed_index })
     }
   }
 

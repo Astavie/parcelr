@@ -1,7 +1,5 @@
 #include "parser.h"
 
-#include "array.h"
-
 const char *parser_symbol_name(parser_symbol symbol) {
   switch (symbol) {
     case SYMBOL_EOF: return "$";
@@ -27,100 +25,83 @@ const char *parser_symbol_name(parser_symbol symbol) {
   return "";
 }
 
-typedef struct {
-  parser_symbol symbol;
-  void *value;
-  int state;
-} parser_state;
-
-void *duplicate(void *ptr, size_t size) {
-  void *dup = malloc(size);
-  memcpy(dup, ptr, size);
-  return dup;
-}
-
-bool parser_parse(parser_value *lexemes, json_value *value) {
-  struct array_s stack   = array_make(parser_value, 16);
-  struct array_s shifted = array_make(parser_state, 16);
+bool parser_parse(struct stack_s symbols, json_value *value) {
+  struct stack_s shifted = stack_make(16);
 
   int state = 0;
 
   while (true) {
-    parser_value next;
-    if (stack.length == 0) {
-      next = *lexemes;
-    } else {
-      next = array_peek(stack, parser_value);
-    }
+    parser_symbol next = stack_peek(symbols, parser_symbol);
 
-    #define CHILD(type, len, index)\
-      void* _v##index = array_elem(shifted, parser_state, shifted.length - len + index).value;\
-      type _##index = *(type*)_v##index;\
-      free(_v##index);
-    #define shift(newstate) do {\
-      if (stack.length > 0) stack.length--; else if (next.symbol != SYMBOL_EOF) lexemes++;\
-      array_push(shifted, ((parser_state){ next.symbol, next.value, state }));\
-      state = newstate;\
-    } while(0)
-    #define reduce(len, symbol, value) do {\
-      shifted.length -= len;\
-      state = array_elem(shifted, parser_state, shifted.length).state;\
-      array_push(stack, ((parser_value){ symbol, value }));\
-    } while(0)
-    #define dup(value) duplicate(&value, sizeof(value))
+    #define POP()\
+      stack_pop(shifted, int)
+    #define POP_CHILD(type, index)\
+      POP(); type _##index = stack_pop(shifted, type)
+    #define SHIFT_PUSH(newstate, type)\
+      stack_pop(symbols, parser_symbol);\
+      _stack_push(&shifted, sizeof(type), _stack_pop(&symbols, sizeof(type)));\
+      stack_push(shifted, state);\
+      state = newstate
+    #define SHIFT(newstate)\
+      stack_pop(symbols, parser_symbol);\
+      stack_push(shifted, state);\
+      state = newstate
+    #define REDUCE(symbol)\
+      parser_symbol sym = SYMBOL_##symbol;\
+      stack_push(symbols, sym)
 
     switch (state) {
       case 0:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_value:
           {
-            shift(1);
+            SHIFT_PUSH(1, json_value);
             continue;
           }
           case SYMBOL_object:
           {
-            shift(2);
+            SHIFT_PUSH(2, json_object);
             continue;
           }
           case SYMBOL_array:
           {
-            shift(3);
+            SHIFT_PUSH(3, json_array);
             continue;
           }
           case SYMBOL_string:
           {
-            shift(4);
+            SHIFT_PUSH(4, json_string);
             continue;
           }
           case SYMBOL_number:
           {
-            shift(5);
+            SHIFT_PUSH(5, double);
             continue;
           }
           case SYMBOL__8:
           {
-            shift(6);
+            SHIFT(6);
             continue;
           }
           case SYMBOL__9:
           {
-            shift(7);
+            SHIFT(7);
             continue;
           }
           case SYMBOL__10:
           {
-            shift(8);
+            SHIFT(8);
             continue;
           }
           case SYMBOL__17:
           {
-            shift(9);
+            SHIFT(9);
             continue;
           }
           case SYMBOL__11:
           {
-            shift(10);
+            SHIFT(10);
             continue;
           }
           default:
@@ -129,10 +110,10 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 1:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_EOF:
           {
-            CHILD(json_value, 1, 0)
+            POP_CHILD(json_value, 0);
             *value = _0;
             return true;
           }
@@ -142,16 +123,16 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 2:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_EOF:
           case SYMBOL__15:
           case SYMBOL__18:
           case SYMBOL__12:
           {
-            json_value this; CHILD(json_object, 1, 0)
-            this.type = JSON_OBJECT; this.data.object = _0;
-            void *value = dup(this);
-            reduce(1, SYMBOL_value, value);
+            state = POP_CHILD(json_object, 0);
+            json_value this; this.type = JSON_OBJECT; this.data.object = _0;
+            stack_push(symbols, this);
+            REDUCE(value);
             continue;
           }
           default:
@@ -160,16 +141,16 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 3:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_EOF:
           case SYMBOL__15:
           case SYMBOL__18:
           case SYMBOL__12:
           {
-            json_value this; CHILD(json_array, 1, 0)
-            this.type = JSON_ARRAY; this.data.array = _0;
-            void *value = dup(this);
-            reduce(1, SYMBOL_value, value);
+            state = POP_CHILD(json_array, 0);
+            json_value this; this.type = JSON_ARRAY;  this.data.array  = _0;
+            stack_push(symbols, this);
+            REDUCE(value);
             continue;
           }
           default:
@@ -178,16 +159,16 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 4:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_EOF:
           case SYMBOL__15:
           case SYMBOL__18:
           case SYMBOL__12:
           {
-            json_value this; CHILD(json_string, 1, 0)
-            this.type = JSON_STRING; this.data.string = _0;
-            void *value = dup(this);
-            reduce(1, SYMBOL_value, value);
+            state = POP_CHILD(json_string, 0);
+            json_value this; this.type = JSON_STRING; this.data.string = _0;
+            stack_push(symbols, this);
+            REDUCE(value);
             continue;
           }
           default:
@@ -196,16 +177,16 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 5:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_EOF:
           case SYMBOL__15:
           case SYMBOL__18:
           case SYMBOL__12:
           {
-            json_value this; CHILD(double, 1, 0)
-            this.type = JSON_NUMBER; this.data.number = _0;
-            void *value = dup(this);
-            reduce(1, SYMBOL_value, value);
+            state = POP_CHILD(double, 0);
+            json_value this; this.type = JSON_NUMBER; this.data.number = _0;
+            stack_push(symbols, this);
+            REDUCE(value);
             continue;
           }
           default:
@@ -214,16 +195,16 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 6:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_EOF:
           case SYMBOL__15:
           case SYMBOL__18:
           case SYMBOL__12:
           {
-            json_value this;
-            this.type = JSON_BOOL; this.data.boolean = true;
-            void *value = dup(this);
-            reduce(1, SYMBOL_value, value);
+            state = POP();
+            json_value this; this.type = JSON_BOOL; this.data.boolean = true;
+            stack_push(symbols, this);
+            REDUCE(value);
             continue;
           }
           default:
@@ -232,16 +213,16 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 7:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_EOF:
           case SYMBOL__15:
           case SYMBOL__18:
           case SYMBOL__12:
           {
-            json_value this;
-            this.type = JSON_BOOL; this.data.boolean = false;
-            void *value = dup(this);
-            reduce(1, SYMBOL_value, value);
+            state = POP();
+            json_value this; this.type = JSON_BOOL; this.data.boolean = false;
+            stack_push(symbols, this);
+            REDUCE(value);
             continue;
           }
           default:
@@ -250,16 +231,16 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 8:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_EOF:
           case SYMBOL__15:
           case SYMBOL__18:
           case SYMBOL__12:
           {
-            json_value this;
-            this.type = JSON_NULL;
-            void *value = dup(this);
-            reduce(1, SYMBOL_value, value);
+            state = POP();
+            json_value this; this.type = JSON_NULL;
+            stack_push(symbols, this);
+            REDUCE(value);
             continue;
           }
           default:
@@ -268,65 +249,65 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 9:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL__18:
           {
-            shift(11);
+            SHIFT(11);
             continue;
           }
           case SYMBOL_values:
           {
-            shift(12);
+            SHIFT_PUSH(12, json_array);
             continue;
           }
           case SYMBOL_value:
           {
-            shift(13);
+            SHIFT_PUSH(13, json_value);
             continue;
           }
           case SYMBOL_object:
           {
-            shift(2);
+            SHIFT_PUSH(2, json_object);
             continue;
           }
           case SYMBOL_array:
           {
-            shift(3);
+            SHIFT_PUSH(3, json_array);
             continue;
           }
           case SYMBOL_string:
           {
-            shift(4);
+            SHIFT_PUSH(4, json_string);
             continue;
           }
           case SYMBOL_number:
           {
-            shift(5);
+            SHIFT_PUSH(5, double);
             continue;
           }
           case SYMBOL__8:
           {
-            shift(6);
+            SHIFT(6);
             continue;
           }
           case SYMBOL__9:
           {
-            shift(7);
+            SHIFT(7);
             continue;
           }
           case SYMBOL__10:
           {
-            shift(8);
+            SHIFT(8);
             continue;
           }
           case SYMBOL__17:
           {
-            shift(9);
+            SHIFT(9);
             continue;
           }
           case SYMBOL__11:
           {
-            shift(10);
+            SHIFT(10);
             continue;
           }
           default:
@@ -335,25 +316,25 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 10:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL__12:
           {
-            shift(14);
+            SHIFT(14);
             continue;
           }
           case SYMBOL_members:
           {
-            shift(15);
+            SHIFT_PUSH(15, json_object);
             continue;
           }
           case SYMBOL_member:
           {
-            shift(16);
+            SHIFT_PUSH(16, json_entry);
             continue;
           }
           case SYMBOL_string:
           {
-            shift(17);
+            SHIFT_PUSH(17, json_string);
             continue;
           }
           default:
@@ -362,16 +343,16 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 11:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_EOF:
           case SYMBOL__15:
           case SYMBOL__18:
           case SYMBOL__12:
           {
-            json_array this;
-            this = (json_array){0};
-            void *value = dup(this);
-            reduce(2, SYMBOL_array, value);
+            POP(); state = POP();
+            json_array this; this = (json_array){0};
+            stack_push(symbols, this);
+            REDUCE(array);
             continue;
           }
           default:
@@ -380,15 +361,15 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 12:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL__18:
           {
-            shift(18);
+            SHIFT(18);
             continue;
           }
           case SYMBOL__15:
           {
-            shift(19);
+            SHIFT(19);
             continue;
           }
           default:
@@ -397,14 +378,14 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 13:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL__15:
           case SYMBOL__18:
           {
-            json_array this; CHILD(json_value, 1, 0)
-            this = array_make(json_value, 16); array_push(this, _0);
-            void *value = dup(this);
-            reduce(1, SYMBOL_values, value);
+            state = POP_CHILD(json_value, 0);
+            json_array this; this = array_make(json_value, 16); array_push(this, _0);
+            stack_push(symbols, this);
+            REDUCE(values);
             continue;
           }
           default:
@@ -413,16 +394,16 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 14:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_EOF:
           case SYMBOL__15:
           case SYMBOL__18:
           case SYMBOL__12:
           {
-            json_object this;
-            this = (json_object){0};
-            void *value = dup(this);
-            reduce(2, SYMBOL_object, value);
+            POP(); state = POP();
+            json_object this; this = (json_object){0};
+            stack_push(symbols, this);
+            REDUCE(object);
             continue;
           }
           default:
@@ -431,15 +412,15 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 15:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL__12:
           {
-            shift(20);
+            SHIFT(20);
             continue;
           }
           case SYMBOL__15:
           {
-            shift(21);
+            SHIFT(21);
             continue;
           }
           default:
@@ -448,14 +429,14 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 16:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL__12:
           case SYMBOL__15:
           {
-            json_object this; CHILD(json_entry, 1, 0)
-            hashmap_create(16, &this); hashmap_put(&this, _0.key.string, _0.key.length, dup(_0.value));
-            void *value = dup(this);
-            reduce(1, SYMBOL_members, value);
+            state = POP_CHILD(json_entry, 0);
+            json_object this; hashmap_create(16, &this); hashmap_put(&this, _0.key.string, _0.key.length, dup(_0.value));
+            stack_push(symbols, this);
+            REDUCE(members);
             continue;
           }
           default:
@@ -464,10 +445,10 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 17:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL__16:
           {
-            shift(22);
+            SHIFT(22);
             continue;
           }
           default:
@@ -476,16 +457,16 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 18:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_EOF:
           case SYMBOL__15:
           case SYMBOL__18:
           case SYMBOL__12:
           {
-            json_array this; CHILD(json_array, 3, 1)
-            this = _1;
-            void *value = dup(this);
-            reduce(3, SYMBOL_array, value);
+            POP(); POP_CHILD(json_array, 1); state = POP();
+            json_array this; this = _1;
+            stack_push(symbols, this);
+            REDUCE(array);
             continue;
           }
           default:
@@ -494,55 +475,55 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 19:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_value:
           {
-            shift(23);
+            SHIFT_PUSH(23, json_value);
             continue;
           }
           case SYMBOL_object:
           {
-            shift(2);
+            SHIFT_PUSH(2, json_object);
             continue;
           }
           case SYMBOL_array:
           {
-            shift(3);
+            SHIFT_PUSH(3, json_array);
             continue;
           }
           case SYMBOL_string:
           {
-            shift(4);
+            SHIFT_PUSH(4, json_string);
             continue;
           }
           case SYMBOL_number:
           {
-            shift(5);
+            SHIFT_PUSH(5, double);
             continue;
           }
           case SYMBOL__8:
           {
-            shift(6);
+            SHIFT(6);
             continue;
           }
           case SYMBOL__9:
           {
-            shift(7);
+            SHIFT(7);
             continue;
           }
           case SYMBOL__10:
           {
-            shift(8);
+            SHIFT(8);
             continue;
           }
           case SYMBOL__17:
           {
-            shift(9);
+            SHIFT(9);
             continue;
           }
           case SYMBOL__11:
           {
-            shift(10);
+            SHIFT(10);
             continue;
           }
           default:
@@ -551,16 +532,16 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 20:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_EOF:
           case SYMBOL__15:
           case SYMBOL__18:
           case SYMBOL__12:
           {
-            json_object this; CHILD(json_object, 3, 1)
-            this = _1;
-            void *value = dup(this);
-            reduce(3, SYMBOL_object, value);
+            POP(); POP_CHILD(json_object, 1); state = POP();
+            json_object this; this = _1;
+            stack_push(symbols, this);
+            REDUCE(object);
             continue;
           }
           default:
@@ -569,15 +550,15 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 21:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_member:
           {
-            shift(24);
+            SHIFT_PUSH(24, json_entry);
             continue;
           }
           case SYMBOL_string:
           {
-            shift(17);
+            SHIFT_PUSH(17, json_string);
             continue;
           }
           default:
@@ -586,55 +567,55 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 22:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL_value:
           {
-            shift(25);
+            SHIFT_PUSH(25, json_value);
             continue;
           }
           case SYMBOL_object:
           {
-            shift(2);
+            SHIFT_PUSH(2, json_object);
             continue;
           }
           case SYMBOL_array:
           {
-            shift(3);
+            SHIFT_PUSH(3, json_array);
             continue;
           }
           case SYMBOL_string:
           {
-            shift(4);
+            SHIFT_PUSH(4, json_string);
             continue;
           }
           case SYMBOL_number:
           {
-            shift(5);
+            SHIFT_PUSH(5, double);
             continue;
           }
           case SYMBOL__8:
           {
-            shift(6);
+            SHIFT(6);
             continue;
           }
           case SYMBOL__9:
           {
-            shift(7);
+            SHIFT(7);
             continue;
           }
           case SYMBOL__10:
           {
-            shift(8);
+            SHIFT(8);
             continue;
           }
           case SYMBOL__17:
           {
-            shift(9);
+            SHIFT(9);
             continue;
           }
           case SYMBOL__11:
           {
-            shift(10);
+            SHIFT(10);
             continue;
           }
           default:
@@ -643,14 +624,14 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 23:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL__15:
           case SYMBOL__18:
           {
-            json_array this; CHILD(json_array, 3, 0) CHILD(json_value, 3, 2)
-            this = _0; array_push(this, _2);
-            void *value = dup(this);
-            reduce(3, SYMBOL_values, value);
+            POP_CHILD(json_value, 2); POP(); state = POP_CHILD(json_array, 0);
+            json_array this; this = _0; array_push(this, _2);
+            stack_push(symbols, this);
+            REDUCE(values);
             continue;
           }
           default:
@@ -659,14 +640,14 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 24:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL__12:
           case SYMBOL__15:
           {
-            json_object this; CHILD(json_object, 3, 0) CHILD(json_entry, 3, 2)
-            this = _0; hashmap_put(&this, _2.key.string, _2.key.length, dup(_2.value));
-            void *value = dup(this);
-            reduce(3, SYMBOL_members, value);
+            POP_CHILD(json_entry, 2); POP(); state = POP_CHILD(json_object, 0);
+            json_object this; this = _0; hashmap_put(&this, _2.key.string, _2.key.length, dup(_2.value));
+            stack_push(symbols, this);
+            REDUCE(members);
             continue;
           }
           default:
@@ -675,14 +656,14 @@ bool parser_parse(parser_value *lexemes, json_value *value) {
       }
       case 25:
       {
-        switch (next.symbol) {
+        switch (next) {
           case SYMBOL__12:
           case SYMBOL__15:
           {
-            json_entry this; CHILD(json_string, 3, 0) CHILD(json_value, 3, 2)
-            this = (json_entry){ _0, _2 };
-            void *value = dup(this);
-            reduce(3, SYMBOL_member, value);
+            POP_CHILD(json_value, 2); POP(); state = POP_CHILD(json_string, 0);
+            json_entry this; this = (json_entry){ _0, _2 };
+            stack_push(symbols, this);
+            REDUCE(member);
             continue;
           }
           default:

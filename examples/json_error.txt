@@ -7,8 +7,7 @@ Entry :: struct {
 
 Object :: map[string]Value
 Array :: []Value
-Null :: struct{}
-Value :: union #no_nil { Object, Array, string, int, bool, Null }
+Value :: union { Object, Array, string, int, bool }
 
 Values :: [dynamic]Value
 
@@ -24,7 +23,7 @@ value // Value //
  -> number                   // this = 69       //
  -> "true"                   // this = true     //
  -> "false"                  // this = false    //
- -> "null"                   // this = Null{}   //
+ -> "null"                   // this = nil      //
 ;
 object // Object //
  -> "{" "}"

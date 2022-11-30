@@ -68,103 +68,105 @@ void print(json_value value, int indent) {
   }
 }
 
-bool prefix(const char *pre, char **str)
+bool prefix(const char *pre, char *str, unsigned long *i)
 {
-  if (strncmp(pre, *str, strlen(pre)) == 0) {
-    *str += strlen(pre);
+  unsigned long len = strlen(pre);
+  if (strncmp(pre, str + *i - len + 1, len) == 0) {
+    *i -= len - 1;
     return true;
   }
   return false;
 }
 
 int main(int argc, char **argv) {
-  struct array_s values = array_make(parser_value, 16);
+  struct stack_s values = stack_make(16);
  
-  for (int i = 1; i < argc; i++) {
-    char *current = argv[i];
+  parser_symbol eof = SYMBOL_EOF;
+  stack_push(values, eof);
 
-    while (current[0] != 0) {
-      #define sym(symbol) array_push(values, ((parser_value){ SYMBOL_##symbol, NULL }))
-      #define val(symbol) array_push(values, ((parser_value){ SYMBOL_##symbol, symbol }))
+  for (int j = argc - 1; j > 0; j--) {
+    char *text = argv[j];
+    unsigned long len = strlen(text);
+    unsigned long i = len;
 
-      while (current[0] == ' ' || current[0] == '\t' || current[0] == '\n' || current[0] == '\v' || current[0] == '\f' || current[0] == '\r') {
-        current++;
-        if (current[0] == 0) break;
+  end:
+    while (i > 0) {
+      i--;
+
+      #define SYM(symbol) parser_symbol sym = SYMBOL_##symbol; stack_push(values, sym);
+      #define VAL(symbol) stack_push(values, symbol); SYM(symbol)
+
+      while (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\v' || text[i] == '\f' || text[i] == '\r') {
+        if (i == 0) goto end;
+        i--;
       }
 
-      if (prefix("true", &current)) {
-        sym(_8);
+      if (prefix("true", text, &i)) {
+        SYM(_8);
         continue;
       }
-      if (prefix("false", &current)) {
-        sym(_9);
+      if (prefix("false", text, &i)) {
+        SYM(_9);
         continue;
       }
-      if (prefix("null", &current)) {
-        sym(_10);
+      if (prefix("null", text, &i)) {
+        SYM(_10);
         continue;
       }
-      if (current[0] == '{') {
-        current++;
-        sym(_11);
+      if (text[i] == '{') {
+        SYM(_11);
         continue;
       }
-      if (current[0] == '}') {
-        current++;
-        sym(_12);
+      if (text[i] == '}') {
+        SYM(_12);
         continue;
       }
-      if (current[0] == ',') {
-        current++;
-        sym(_15);
+      if (text[i] == ',') {
+        SYM(_15);
         continue;
       }
-      if (current[0] == ':') {
-        current++;
-        sym(_16);
+      if (text[i] == ':') {
+        SYM(_16);
         continue;
       }
-      if (current[0] == '[') {
-        current++;
-        sym(_17);
+      if (text[i] == '[') {
+        SYM(_17);
         continue;
       }
-      if (current[0] == ']') {
-        current++;
-        sym(_18);
+      if (text[i] == ']') {
+        SYM(_18);
         continue;
       }
-      if (current[0] == '"') {
-        current++;
-
+      if (text[i] == '"') {
         int length = 0;
-        while (current[length] != 0 && current[length] != '"') length++;
-        if (current[length] == 0) return 1;
+        while (length < i && text[i - 1 - length] != '"') length++;
+        if (length == i) return 1;
 
-        json_string *string = (json_string*)malloc(sizeof(json_string));
-        string->string = current;
-        string->length = length;
-        val(string);
+        json_string string = { &text[i - length], length };
+        VAL(string);
 
-        current += length + 1;
+        i -= length + 1;
         continue;
       }
 
-      char *next = current;
-      double f = strtod(current, &next);
+      char *next = &text[i];
+      double number = strtod(&text[i], &next);
+      if (next == &text[i]) return 1;
 
-      if (next == current) return 1;
-      current = next;
+      while (i > 0) {
+        char *next = &text[i - 1];
+        double n = strtod(&text[i - 1], &next);
+        if (next == &text[i - 1]) break;
 
-      double *number = (double*)malloc(sizeof(double));
-      *number = f;
-      val(number);
+        i--;
+        number = n;
+      }
+
+      VAL(number);
     }
   }
-
-  array_push(values, ((parser_value){ SYMBOL_EOF, NULL }));
  
   json_value value = {0};
-  parser_parse((parser_value*)values.data, &value);
+  parser_parse(values, &value);
   print(value, 0);
 }
