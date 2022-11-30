@@ -42,7 +42,7 @@ aliases : map[string]string
 @(init, private)
 _get_aliases :: proc() {
   table, _ := csv.read_all_from_string(#load("aliases.csv"))
-  aliases = make(map[string]string, len(aliases))
+  aliases = make(map[string]string, len(table))
   for row in table {
     aliases[row[0]] = row[1]
   }
