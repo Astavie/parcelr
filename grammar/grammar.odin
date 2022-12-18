@@ -86,7 +86,7 @@ parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
       if alias, ok := aliases[name]; ok {
         enum_name = strings.clone(alias)
       } else {
-        enum_name = fmt.aprintf("_%i", len(symbols))
+        enum_name = strings.to_upper(name)
       }
     } else {
       name = strings.clone(token)
