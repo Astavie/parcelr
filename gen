@@ -1,10 +1,2 @@
 #!/bin/sh
-
-rm examples/c/parser.h
-rm examples/c/parser.c
-
-odin run . -- LALR1 examples/$1.txt
-
-mv out0 examples/c/parser.h
-mv out1 examples/c/parser.c
-
+odin run . -- LALR1 examples/$1.txt examples/c templates/c/parser.h templates/c/parser.c

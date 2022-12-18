@@ -1,5 +1,4 @@
-#include "template.h" //d
-//l #include "parser.h"
+#include "parser.h"
 
 const char *parser_symbol_name(parser_symbol symbol) {
   switch (symbol) {

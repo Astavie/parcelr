@@ -3,6 +3,7 @@ package main
 import "core:fmt"
 import "core:os"
 import "core:mem"
+import "core:path/filepath"
 
 import "codegen"
 import "grammar"
@@ -23,8 +24,8 @@ main :: proc() {
 }
 
 _main :: proc() {
-  if len(os.args) < 3 {
-    fmt.println("parcelr LR0|SLR1|CLR1|LALR1 [file]")
+  if len(os.args) < 5 {
+    fmt.println("parcelr LR0|SLR1|CLR1|LALR1 [grammar] [dir] [templates...]")
     return
   }
 
@@ -83,7 +84,10 @@ _main :: proc() {
   grammar.print_table(g, table)
   fmt.println()
 
-  for path, index in ([?]string{"templates/c/template.h", "templates/c/template.c"}) {
+  out_dir := os.args[3]
+
+  for path, index in os.args[4:] {
+    base := filepath.base(path)
     template, ok3 := os.read_entire_file(path)
     if !ok3 {
       fmt.println("could not parse template: unknown file")
@@ -105,7 +109,7 @@ _main :: proc() {
     }
     defer delete(e)
 
-    os.write_entire_file(fmt.tprintf("out%i", index), transmute([]byte)e)
+    os.write_entire_file(filepath.join({ out_dir, base }, context.temp_allocator), transmute([]byte)e)
   }
   fmt.println("SUCCESS")
 }
