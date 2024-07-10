@@ -110,7 +110,7 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
 	}
 
 	#partial switch v in val {
-	case []string, []int, []LookaheadVal, []ReduceVal, []StateVal, []Symbol:
+	case []string, []int, []LookaheadVal, []ReduceVal, []StateVal, []Symbol, []void:
 		it, _ := as_slice(val, false)
 		switch s {
 		case "length":
