@@ -96,6 +96,17 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
 		if s[0] == '"' && s[len(s) - 1] == '"' {
 			return slice.count(v, s[1:len(s) - 1]), true
 		}
+	case int:
+		// get equal
+		if s[0] == '"' && s[len(s) - 1] == '"' {
+			i := strconv.parse_int(s[1:len(s) - 1], 10) or_return
+			return int(v == i), true
+		}
+	case string:
+		// get equal
+		if s[0] == '"' && s[len(s) - 1] == '"' {
+			return int(v == s[1:len(s) - 1]), true
+		}
 	}
 
 	#partial switch v in val {
