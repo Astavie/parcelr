@@ -18,39 +18,11 @@
 
       packages = forEachSupportedSystem ({ pkgs }: rec {
         default = parcelr;
-        parcelr = pkgs.stdenv.mkDerivation {
-          name = "parcelr";
-          src = ./.;
-          nativeBuildInputs = [ pkgs.odin ];
-          buildPhase = ''
-            runHook preBuild
-            odin build . -out:parcelr
-            runHook postBuild
-          '';
-          installPhase = ''
-            runHook preInstall
-            install -Dm755 parcelr -t $out/bin/
-            runHook postInstall
-          '';
-        };
+        parcelr = pkgs.callPackage ./derivation.nix {};
       });
 
       overlays.default = final: prev: {
-        parcelr = prev.stdenv.mkDerivation {
-          name = "parcelr";
-          src = ./.;
-          nativeBuildInputs = [ prev.odin ];
-          buildPhase = ''
-            runHook preBuild
-            odin build . -out:parcelr
-            runHook postBuild
-          '';
-          installPhase = ''
-            runHook preInstall
-            install -Dm755 parcelr -t $out/bin/
-            runHook postInstall
-          '';
-        };
+        parcelr = prev.callPackage ./derivation.nix {};
       };
     };
 }
