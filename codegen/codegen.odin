@@ -92,7 +92,15 @@ get_value :: proc(var: Var, stack: []StackElement) -> (value: Value, ok: bool) {
 	return {}, false
 }
 
-eval :: proc(directives: []Directive, g: grammar.Grammar, table: grammar.Table) -> (string, bool) {
+eval :: proc(
+	directives: []Directive,
+	g: grammar.Grammar,
+	table: grammar.Table,
+	follow: []grammar.Lookahead,
+) -> (
+	string,
+	bool,
+) {
 	globals := make_globals(g, table)
 
 	stack := make([dynamic]StackElement)
@@ -108,6 +116,15 @@ eval :: proc(directives: []Directive, g: grammar.Grammar, table: grammar.Table) 
 		delete_value(stack[3].value)
 		delete(stack)
 	}
+
+	// set up follow sets
+	symbols = g.symbols
+	lexemes = g.lexemes
+	follow_sets = make(map[string]grammar.Lookahead)
+	for lah, i in follow {
+		follow_sets[g.symbols[i].name] = lah
+	}
+	defer delete(follow_sets)
 
 	sb := strings.builder_make_none()
 

@@ -45,6 +45,10 @@ Value :: union #no_nil {
 	[]Symbol,
 }
 
+symbols: []grammar.SymbolDefinition
+lexemes: []grammar.Symbol
+follow_sets: map[string]grammar.Lookahead
+
 get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
 	#partial switch v in val {
 	case LookaheadVal:
@@ -84,6 +88,15 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
 			return v.type, true
 		case "lexeme":
 			return make_single(s) if v.lexeme else []string{}, true
+		case "follow":
+			follow := make([dynamic]Symbol)
+			for lexeme in follow_sets[v.name] {
+				symbol := int(lexemes[int(lexeme)])
+				if symbol != 0 {
+					append(&follow, symbols[symbol])
+				}
+			}
+			return follow[:], true
 		}
 	case []int:
 		// get element count

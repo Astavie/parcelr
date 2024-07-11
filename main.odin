@@ -102,7 +102,7 @@ _main :: proc() {
 		}
 		defer codegen.delete_directives(dirs)
 
-		e, ok5 := codegen.eval(dirs, g, table)
+		e, ok5 := codegen.eval(dirs, g, table, follow)
 		if !ok5 {
 			fmt.println("could not evaluate template")
 			return
