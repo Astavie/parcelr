@@ -11,3 +11,7 @@
 "(",OPEN_PAREN
 ")",CLOSE_PAREN
 ";",SEMICOLON
+"^",CARET
+"?",QUESTION
+"!",BANG
+".",DOT
