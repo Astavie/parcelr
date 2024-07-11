@@ -21,6 +21,7 @@ SymbolDefinition :: struct {
 	enum_name: string,
 	type:      string,
 	lexeme:    bool,
+	literal:   bool,
 }
 
 Grammar :: struct {
@@ -69,9 +70,9 @@ parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
 	// append ROOT, EOF, and ERR symbols
 	rhs := make([]Symbol, 1)
 	append(&rules, RuleDefinition{ROOT, rhs, {}})
-	append(&symbols, SymbolDefinition{"ROOT", {}, {}, false}) // won't show up in templates but it's nice for debug information
-	append(&symbols, SymbolDefinition{"$", "EOF", {}, true})
-	append(&symbols, SymbolDefinition{"error", "ERR", {}, true})
+	append(&symbols, SymbolDefinition{"ROOT", {}, {}, false, false}) // won't show up in templates but it's nice for debug information
+	append(&symbols, SymbolDefinition{"$", "EOF", {}, true, false})
+	append(&symbols, SymbolDefinition{"error", "ERR", {}, true, false})
 
 	EXPR_ASSIGN :: "->"
 	EXPR_DONE :: ";"
@@ -81,7 +82,9 @@ parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
 	get_symbol :: proc(symbols: ^[dynamic]SymbolDefinition, token: string) -> Symbol {
 		name: string
 		enum_name: string
+		literal := false
 		if token[0] == '"' && token[len(token) - 1] == '"' {
+			literal = true
 			name = strings.clone(token[1:len(token) - 1])
 			if alias, ok := aliases[name]; ok {
 				enum_name = strings.clone(alias)
@@ -99,7 +102,7 @@ parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
 				return Symbol(idx)
 			}
 		}
-		append(symbols, SymbolDefinition{name, enum_name, {}, true})
+		append(symbols, SymbolDefinition{name, enum_name, {}, true, literal})
 		return Symbol(len(symbols) - 1)
 	}
 

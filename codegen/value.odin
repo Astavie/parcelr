@@ -87,7 +87,9 @@ get_child :: proc(val: Value, s: string) -> (v: Value, ok: bool) {
 		case "type":
 			return v.type, true
 		case "lexeme":
-			return make_single(s) if v.lexeme else []string{}, true
+			return int(v.lexeme), true
+		case "literal":
+			return int(v.literal), true
 		case "follow":
 			follow := make([dynamic]Symbol)
 			for lexeme in follow_sets[v.name] {
