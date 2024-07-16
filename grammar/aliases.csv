@@ -19,3 +19,15 @@
 "->",ARROW
 "@sizeof",SIZE_OF
 "@alignof",ALIGN_OF
+"-",DASH
+"--",DOUBLE_DASH
+"---",TRIPLE_DASH
+"==",DOUBLE_EQUALS
+"<",LESS
+">",GREATER
+"/",SLASH
+"*",STAR
+"+",PLUS
+"++",DOUBLE_PLUS
+"&",AMPERSAND
+"..",DOUBLE_DOT
