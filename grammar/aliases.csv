@@ -17,3 +17,5 @@
 ".",DOT
 "_",UNDERSCORE
 "->",ARROW
+"@sizeof",SIZE_OF
+"@alignof",ALIGN_OF
