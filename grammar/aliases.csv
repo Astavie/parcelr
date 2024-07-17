@@ -16,7 +16,8 @@
 "!",BANG
 ".",DOT
 "_",UNDERSCORE
-"->",ARROW
+"->",ARROW_RIGHT
+"<-",ARROW_LEFT
 "@sizeof",SIZE_OF
 "@alignof",ALIGN_OF
 "-",DASH
