@@ -1,37 +1,35 @@
-"true",TRUE
-"false",FALSE
-"null",NULL
-"{",OPEN_BRACE
-"}",CLOSE_BRACE
-",",COMMA
-":",COLON
-"[",OPEN_BRACKET
-"]",CLOSE_BRACKET
-"=",EQUALS
-"!=",BANG_EQUALS
-"(",OPEN_PAREN
-")",CLOSE_PAREN
-";",SEMICOLON
-"^",CARET
-"?",QUESTION
-"!",BANG
-".",DOT
-"_",UNDERSCORE
-"->",ARROW_RIGHT
-"<-",ARROW_LEFT
-"@sizeof",SIZE_OF
-"@alignof",ALIGN_OF
-"-",DASH
-"--",DOUBLE_DASH
-"---",TRIPLE_DASH
-"==",DOUBLE_EQUALS
-"<",LESS
-">",GREATER
-"<=",LESS_EQUALS
-">=",GREATER_EQUALS
-"/",SLASH
-"*",STAR
-"+",PLUS
-"++",DOUBLE_PLUS
-"&",AMPERSAND
-"..",DOUBLE_DOT
+"true",     TRUE
+"false",    FALSE
+"null",     NULL
+"{",        OPEN_BRACE
+"}",        CLOSE_BRACE
+",",        COMMA
+":",        COLON
+"[",        OPEN_BRACKET
+"]",        CLOSE_BRACKET
+"=",        EQUALS
+"(",        OPEN_PAREN
+")",        CLOSE_PAREN
+";",        SEMICOLON
+"^",        CARET
+"?",        QUESTION
+"!",        BANG
+".",        DOT
+"_",        UNDERSCORE
+"->",       ARROW_RIGHT
+"<-",       ARROW_LEFT
+"@sizeof",  SIZE_OF
+"@alignof", ALIGN_OF
+"-",        DASH
+"--",       DOUBLE_DASH
+"---",      TRIPLE_DASH
+"==",       DOUBLE_EQUALS
+"<",        LESS
+">",        GREATER
+"/",        SLASH
+"*",        STAR
+"+",        PLUS
+"++",       DOUBLE_PLUS
+"&",        AMPERSAND
+"..",       DOUBLE_DOT
+"%",        PERCENT

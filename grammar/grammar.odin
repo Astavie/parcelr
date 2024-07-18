@@ -88,6 +88,12 @@ parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
 			name = strings.clone(token[1:len(token) - 1])
 			if alias, ok := aliases[name]; ok {
 				enum_name = strings.clone(alias)
+			} else if alias, ok := aliases[name[:len(name) - 1]];
+			   ok && name[len(name) - 1] == '=' {
+				sb: strings.Builder
+				fmt.sbprint(&sb, alias)
+				fmt.sbprint(&sb, "_EQUALS")
+				enum_name = strings.to_string(sb)
 			} else {
 				enum_name = strings.to_upper(name)
 			}
@@ -254,3 +260,4 @@ parse_grammar :: proc(d: []u8) -> (Grammar, Error) {
 
 	return {rules[:], symbols[:], lexemes[:], preamble}, {}
 }
+
