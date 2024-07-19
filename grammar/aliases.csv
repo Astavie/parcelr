@@ -17,6 +17,7 @@
 ".",        DOT
 "_",        UNDERSCORE
 "->",       ARROW_RIGHT
+"=>",       ARROW_RIGHT_FAT
 "<-",       ARROW_LEFT
 "@sizeof",  SIZE_OF
 "@alignof", ALIGN_OF
